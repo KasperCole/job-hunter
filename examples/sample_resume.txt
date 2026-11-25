@@ -1,0 +1,25 @@
+Jordan Rivera
+Brooklyn, NY 11201 | jordan.rivera@example.com | (555) 010-4477 | linkedin.com/in/jordan-rivera-example
+
+SUMMARY
+IT support professional with 6+ years of experience supporting SaaS users and office staff.
+
+EXPERIENCE
+Senior IT Support Specialist | Northwind Health | Jan 2021 – Present
+- Resolved 4,000+ tickets in ServiceNow with a 4.7/5 CSAT score
+- Rolled out Okta SSO and MFA for 900 employees, cutting password-reset tickets by 40%
+- Managed Active Directory, Microsoft 365 and Intune for three offices
+- Wrote 120 knowledge base articles that reduced repeat requests by 25%
+
+Help Desk Technician | Contoso Retail | Jun 2018 – Dec 2020
+- Supported 30 stores with Windows 10, VPN, and point-of-sale troubleshooting
+- Set up DNS, DHCP and Wi-Fi for 5 new locations
+
+EDUCATION
+B.S. Information Technology, City College of New York, 2018
+
+SKILLS
+ServiceNow, Jira, Okta, Active Directory, Microsoft 365, Intune, Jamf, PowerShell, Windows, macOS, networking, SQL
+
+CERTIFICATIONS
+CompTIA A+, Network+

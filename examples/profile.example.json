@@ -1,0 +1,94 @@
+{
+  "first_name": "Jordan",
+  "last_name": "Rivera",
+  "email": "jordan.rivera@example.com",
+  "phone": "(555) 010-4477",
+  "city": "Brooklyn",
+  "state": "NY",
+  "country": "United States",
+  "postal_code": "11201",
+  "linkedin": "https://linkedin.com/in/jordan-rivera-example",
+  "github": "",
+  "website": "",
+  "current_company": "",
+  "current_title": "Senior IT Support Specialist",
+  "years_experience": 8,
+  "work_authorized": "",
+  "needs_sponsorship": "",
+  "notice_period": "",
+  "timezone": "",
+  "resumes": [
+    {
+      "label": "IT",
+      "file": "resumes/sample_resume.docx"
+    }
+  ],
+  "target_titles": [
+    "IT Support Specialist",
+    "Help Desk Technician"
+  ],
+  "skills": [
+    "active directory",
+    "troubleshooting",
+    "knowledge base",
+    "microsoft 365",
+    "networking",
+    "servicenow",
+    "powershell",
+    "help desk",
+    "network+",
+    "comptia",
+    "retail",
+    "intune",
+    "macos",
+    "wi-fi",
+    "jira",
+    "csat",
+    "okta",
+    "saas",
+    "jamf",
+    "dhcp",
+    "vpn",
+    "dns",
+    "sql",
+    "mfa",
+    "sso",
+    "a+",
+    "windows",
+    "comptia a+"
+  ],
+  "achievements": [
+    "Resolved 4,000+ tickets in ServiceNow with a 4.7/5 CSAT score",
+    "Rolled out Okta SSO and MFA for 900 employees, cutting password-reset tickets by 40%",
+    "Wrote 120 knowledge base articles that reduced repeat requests by 25%",
+    "Supported 30 stores with Windows 10, VPN, and point-of-sale troubleshooting"
+  ],
+  "search": {
+    "keywords": [
+      "IT Support Specialist",
+      "Help Desk Technician"
+    ],
+    "workplace": [
+      "remote",
+      "hybrid",
+      "onsite"
+    ],
+    "location": "New York, NY",
+    "radius_miles": 30,
+    "remote_country": "US",
+    "min_salary": 60000,
+    "exclude_words": [
+      "intern",
+      "internship"
+    ],
+    "max_age_days": 30,
+    "min_match": 40
+  },
+  "api_keys": {
+    "adzuna_app_id": "",
+    "adzuna_app_key": "",
+    "usajobs_email": "",
+    "usajobs_key": "",
+    "themuse_key": ""
+  }
+}

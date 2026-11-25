@@ -1,0 +1,10 @@
+# Personal data: never commit this folder (resume, profile, job database, letters, browser profile)
+my-data/
+*.db
+applications.csv
+fill.log
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store

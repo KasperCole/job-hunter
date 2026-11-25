@@ -1,0 +1,4 @@
+# Job Hunter runs on the Python standard library. These extras are optional:
+pypdf>=4.0          # read PDF resumes (.docx and .txt work without it)
+playwright>=1.40    # pre-fill application forms (then run: python -m playwright install chromium)
+anthropic>=0.70     # Claude-written cover letters (needs ANTHROPIC_API_KEY)
