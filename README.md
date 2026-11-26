@@ -102,6 +102,16 @@ or set the `JOBHUNTER_HOME` environment variable.
 
 Job sites ban accounts that submit applications automatically, many forms have CAPTCHAs, and some questions only you should answer. Submitting applications you haven't read can also hurt your chances. So Job Hunter does everything up to the Submit button, and you take the last step. That usually takes under a minute per job.
 
+## Why it doesn't rewrite your resume for each job
+
+Some job tools rewrite your resume for every listing. Job Hunter doesn't, on purpose:
+
+- Doing it well takes an AI model. Without one, a program can only reorder bullets or stuff in the listing's keywords, which reads as robotic to recruiters and can trip keyword-stuffing checks.
+- Even with an AI model, rewrites can overstate or invent experience, and you'd have to check every copy line by line.
+- You know which of your experience matters most for a role. A few minutes tailoring your own resume, using the **Missing** skills on each job page and the **Skills** page as a guide, works better.
+
+What it does instead: you can upload more than one version of your resume (for example a technical one and a general one), and for each job the app picks the version that covers the most of the skills the listing asks for.
+
 ## Your privacy
 
 - Everything personal is stored in `my-data/`: your resume, `profile.json`, the job database, cover letters, your saved answers (`answers.json`) and the pre-fill browser profile. Answers to questions about passwords, Social Security numbers, dates of birth or bank details are never saved. That folder is in `.gitignore`, so it is never committed if you fork this project.
