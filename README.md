@@ -30,7 +30,7 @@ To add a company, find the board name in its careers link (`boards.greenhouse.io
 
 ## Install
 
-You need **Python 3.9 or newer**.
+You need **Python 3.10 or newer**.
 
 - **Windows:** install Python from [python.org](https://www.python.org/downloads/) and tick **"Add python.exe to PATH"** during setup.
 - **Mac:** open Terminal and run `python3 --version`. If it isn't installed, macOS offers to install it.
