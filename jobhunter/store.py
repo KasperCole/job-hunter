@@ -9,7 +9,9 @@ from . import config
 from .matching import best_resume, gap_analysis, resume_low, score_job
 from .resume import extract_text
 
-STATUSES = ["new", "saved", "applied", "interview", "skipped"]
+STATUSES = ["new", "saved", "applied", "interview", "offer", "rejected", "ghosted", "skipped"]
+# Columns added after the first release; db() adds them to older databases.
+LATER_COLUMNS = {"applied_at": "TEXT", "interview_at": "TEXT", "followed_up_at": "TEXT", "closed_at": "TEXT"}
 
 COLUMNS = """id TEXT PRIMARY KEY, source TEXT, title TEXT, company TEXT, location TEXT, workplace TEXT,
     url TEXT, apply_url TEXT, description TEXT, posted TEXT, salary_min REAL, salary_max REAL,
@@ -22,7 +24,30 @@ def db():
     con = sqlite3.connect(config.path("jobs.db"), timeout=30)
     con.row_factory = sqlite3.Row
     con.execute(f"CREATE TABLE IF NOT EXISTS jobs ({COLUMNS})")
+    have = {r[1] for r in con.execute("PRAGMA table_info(jobs)")}
+    for col, typ in LATER_COLUMNS.items():
+        if col not in have:
+            con.execute(f"ALTER TABLE jobs ADD COLUMN {col} {typ}")
     return con
+
+
+def set_status(con, job_id, status, now=None):
+    """Change a job's status and remember when it was applied to, interviewed or closed."""
+    now = now or dt.datetime.now(dt.timezone.utc).isoformat()
+    con.execute("UPDATE jobs SET status=?, updated=? WHERE id=?", (status, now, job_id))
+    if status == "applied":
+        con.execute("UPDATE jobs SET applied_at=COALESCE(applied_at, ?) WHERE id=?", (now, job_id))
+    elif status == "interview":
+        con.execute("UPDATE jobs SET applied_at=COALESCE(applied_at, ?), interview_at=COALESCE(interview_at, ?) "
+                    "WHERE id=?", (now, now, job_id))
+    elif status == "offer":
+        con.execute("UPDATE jobs SET applied_at=COALESCE(applied_at, ?), closed_at=? WHERE id=?", (now, now, job_id))
+    elif status in ("rejected", "ghosted"):
+        con.execute("UPDATE jobs SET closed_at=? WHERE id=?", (now, job_id))
+    elif status in ("new", "saved"):
+        con.execute("UPDATE jobs SET applied_at=NULL, interview_at=NULL, followed_up_at=NULL, closed_at=NULL "
+                    "WHERE id=?", (job_id,))
+    con.commit()
 
 
 def resume_texts(profile):
@@ -114,11 +139,14 @@ def rescore(profile):
     return dropped
 
 
-def add_manual(profile, url, title, company, location="", description=""):
+def add_manual(profile, url, title, company, location="", description="", salary=(None, None), hint=None,
+               apply_url=""):
     """A job you found yourself. It's always kept, whatever its score."""
+    from .linkinfo import clean_url
     from .sources import job
+    url = clean_url(url)
     j = job("manual", re.sub(r"[^a-z0-9]+", "-", (company + "-" + title).lower())[:80], title, company,
-            location or "", url, url, description)
+            location or "", url, apply_url or url, description, None, salary, hint)
     resumes = resume_texts(profile)
     rlow = resume_low(profile, [t for _, t in resumes])
     ridx = best_resume(description, resumes)
@@ -126,9 +154,10 @@ def add_manual(profile, url, title, company, location="", description=""):
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     con = db()
     con.execute("""INSERT OR REPLACE INTO jobs (id, source, title, company, location, workplace, url, apply_url,
-        description, score, fit, fit_label, matched, missing, flags, reasons, resume, status, first_seen, updated)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?)""",
-                (j["id"], "manual", title, company, location, j["workplace"], url, url, description, 100, g["fit"],
+        description, salary_min, salary_max, score, fit, fit_label, matched, missing, flags, reasons, resume, status,
+        first_seen, updated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?)""",
+                (j["id"], "manual", title, company, location, j["workplace"], url, j["apply_url"], description,
+                 j["salary_min"], j["salary_max"], 100, g["fit"],
                  g["label"], json.dumps(g["matched"]), json.dumps(g["missing"]), json.dumps(g["flags"]),
                  "added by you", ridx, now, now))
     con.commit()

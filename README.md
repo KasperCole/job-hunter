@@ -12,7 +12,10 @@ It runs on your own computer. Your resume and everything else it learns about yo
    - **Match** (0 to 100): how well the job fits what you're looking for, based on title, skills, pay, location and level.
    - **Fit** (0 to 100): the share of the skills the listing asks for that are on your resume. The skills you're missing are listed, which is useful for deciding what to learn next.
 4. **Writes a cover letter** for each match, using only experience that's on your resume. With an Anthropic API key, Claude writes it. Without one, a template fills in your own achievements.
-5. **Pre-fills the application** on the company's site: name, email, phone, links, location, resume file, cover letter, and the work-authorization answers you set. It works best on Greenhouse, Lever and Ashby forms, which many companies use. It never clicks Submit.
+5. **Pre-fills the application** on the company's site: name, email, phone, links, location, resume file, cover letter, the work-authorization answers you set, and your saved answers to custom questions. It works best on Greenhouse, Lever and Ashby forms, which many companies use. It never clicks Submit.
+6. **Remembers your answers to custom questions.** The **Answers** page lists the questions application forms ask most often ("Why do you want to work at ...?", "Are you willing to relocate?", "Years of ... experience?"), with a box to answer each. Answers you type into a pre-filled form are saved there too when you close the window. Similar questions share one answer, and `{company}` and `{title}` in an answer are replaced for each job. An answer that names a specific company is held for you to check before it's used on another company's form.
+7. **Shows which skills to learn next.** The **Skills** page is a heat map of the skills listings ask for that aren't on your resume, by the kind of role you're looking for. Click a skill to see the jobs that want it.
+8. **Tracks your applications.** After you apply, mark jobs as interview, offer or rejected. The **Progress** page shows how many applications got replies, interviews and offers, lists follow-ups that are due a week after you apply, and moves jobs with no news after 30 days to Ghosted.
 
 ## Where the jobs come from
 
@@ -25,6 +28,8 @@ Job Hunter only uses official public APIs and companies' own public job boards. 
 | Remotive, RemoteOK, Himalayas, Jobicy | Remote jobs | No |
 | [Adzuna](https://developer.adzuna.com/) | Jobs at local employers in any US city, within a distance you choose. The best source for on-site and hybrid work. | Free |
 | [USAJOBS](https://developer.usajobs.gov/) | US federal government jobs | Free |
+
+To add a single job you found yourself, paste its link into **Add a job you found yourself** on the Jobs page. Job Hunter reads the title, company, location, pay and description from the posting (Greenhouse, Lever and Ashby links always work, and most other career sites do too).
 
 To add a company, find the board name in its careers link (`boards.greenhouse.io/<name>`, `jobs.lever.co/<name>` or `jobs.ashbyhq.com/<name>`) and add it to `data/companies.json`, or to `my-data/companies.json` to keep your list private.
 
@@ -99,7 +104,7 @@ Job sites ban accounts that submit applications automatically, many forms have C
 
 ## Your privacy
 
-- Everything personal is stored in `my-data/`: your resume, `profile.json`, the job database, cover letters and the pre-fill browser profile. That folder is in `.gitignore`, so it is never committed if you fork this project.
+- Everything personal is stored in `my-data/`: your resume, `profile.json`, the job database, cover letters, your saved answers (`answers.json`) and the pre-fill browser profile. Answers to questions about passwords, Social Security numbers, dates of birth or bank details are never saved. That folder is in `.gitignore`, so it is never committed if you fork this project.
 - The app talks only to the job sources listed above and, if you add a key, the Anthropic API (which receives your resume text and the job description to write a letter).
 - The local web page only accepts connections from your own computer.
 
@@ -107,7 +112,7 @@ Job sites ban accounts that submit applications automatically, many forms have C
 
 - The resume reader is rule-based. Unusual layouts (tables, columns, text inside images) may need more fixing on the setup page. A scanned PDF can't be read; use a Word copy.
 - "Near you" is based on a table of US metro areas in `jobhunter/locations.py`. If your town isn't in a listed metro, jobs in your state count as local. Adzuna searches by distance, so add a free Adzuna key for the best local results.
-- Pre-fill recognizes common form fields. Custom questions are left for you.
+- Pre-fill recognizes common form fields and questions you've saved answers for. Other questions are left for you, and radio buttons and checkboxes are always left for you.
 
 ## Contributing
 

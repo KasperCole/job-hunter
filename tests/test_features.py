@@ -1,0 +1,232 @@
+"""Offline tests for the answer bank, skills heat map, follow-up tracking and paste-a-link."""
+import datetime as dt
+import json
+import os
+import sys
+import tempfile
+import threading
+import unittest
+import urllib.error
+import urllib.parse
+import urllib.request
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+from jobhunter import answers, config, insights, linkinfo, prefill, store  # noqa: E402
+
+
+class AnswerBankTests(unittest.TestCase):
+    def test_topics_group_variants(self):
+        self.assertEqual(answers.topic_of("Why do you want to work at Acme?", "Acme"), "why_company")
+        self.assertEqual(answers.topic_of("What interests you about joining Globex?", "Globex"), "why_company")
+        self.assertEqual(answers.topic_of("Why Initech? *", "Initech"), "why_company")
+        self.assertEqual(answers.topic_of("What makes you a great fit for this role?"), "good_fit")
+        self.assertEqual(answers.topic_of("Are you willing to relocate?"), "relocate")
+        self.assertEqual(answers.topic_of("Veteran Status"), "veteran")
+        self.assertIsNone(answers.topic_of("Years of Active Directory experience"))
+
+    def test_company_answer_is_templated_and_held_for_review(self):
+        bank = {}
+        self.assertTrue(answers.learn(bank, "Why do you want to work at Acme?",
+                                      "Acme's help desk tools are ones I use every day.", "Acme", "IT Support"))
+        e = bank["why_company"]
+        self.assertEqual(e["answer"], "{company}'s help desk tools are ones I use every day.")
+        self.assertTrue(e["needs_review"])
+        # Not reused anywhere until approved.
+        self.assertEqual(answers.find(bank, "Why do you want to work at Globex?", "Globex"), "")
+        answers.set_answer(bank, "why_company", "I'd like to bring my support experience to {company} as a {title}.")
+        self.assertEqual(answers.find(bank, "Why Globex?", "Globex", "Help Desk Analyst"),
+                         "I'd like to bring my support experience to Globex as a Help Desk Analyst.")
+
+    def test_plain_answers_reused_and_fuzzy_matched(self):
+        bank = {}
+        answers.learn(bank, "How many years of Active Directory experience do you have?", "4", "Acme")
+        self.assertFalse(bank[answers.key_for("How many years of Active Directory experience do you have?")]
+                         ["needs_review"])
+        self.assertEqual(answers.find(bank, "How many years of Active Directory experience do you have? *"), "4")
+        self.assertEqual(answers.find(bank, "How many years of Active Directory experience have you?"), "4")
+        self.assertEqual(answers.find(bank, "How many years of Python experience do you have?"), "")
+
+    def test_frequency_counts_once_per_job(self):
+        bank = {}
+        answers.note_seen(bank, ["Why Acme?", "Why do you want to work at Acme?"], "job1", "Acme")
+        answers.note_seen(bank, ["Why Acme?"], "job1", "Acme")
+        answers.note_seen(bank, ["What excites you about Globex?"], "job2", "Globex")
+        answers.note_seen(bank, ["Are you willing to relocate?"], "job2", "Globex")
+        top = answers.most_common(bank)
+        self.assertEqual(top[0][0], "why_company")
+        self.assertEqual(top[0][1]["seen"], 2)
+
+    def test_sensitive_questions_never_saved(self):
+        bank = {}
+        self.assertFalse(answers.learn(bank, "Social Security Number", "123-45-6789"))
+        self.assertFalse(answers.learn(bank, "Password", "hunter2"))
+        self.assertEqual(bank, {})
+
+    def test_prefill_picks_custom_questions(self):
+        fields = [{"label": "First Name", "type": "text", "value": "Jordan"},
+                  {"label": "Why do you want to work here?", "type": "textarea", "value": "Because"},
+                  {"label": "Race / Ethnicity", "type": "select-one", "value": ""},
+                  {"label": "Resume", "type": "file", "value": ""}]
+        got = prefill.custom_questions(fields)
+        self.assertEqual(got, {"Why do you want to work here?": "Because", "Race / Ethnicity": ""})
+
+
+class LinkTests(unittest.TestCase):
+    def test_clean_url(self):
+        self.assertEqual(linkinfo.clean_url("https://Jobs.Lever.co/acme/abc-123/?utm_source=x&lever-source=LinkedIn"),
+                         "https://jobs.lever.co/acme/abc-123")
+        self.assertEqual(linkinfo.clean_url("acme.com/careers?id=5&gh_src=abc"), "https://acme.com/careers?id=5")
+
+    def test_jsonld(self):
+        page = """<html><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
+        "title":"IT Support Specialist","hiringOrganization":{"@type":"Organization","name":"Acme Corp"},
+        "jobLocationType":"TELECOMMUTE","description":"<p>Support Okta and Jamf.</p>",
+        "baseSalary":{"@type":"MonetaryAmount","currency":"USD","value":{"@type":"QuantitativeValue",
+        "minValue":30,"maxValue":36,"unitText":"HOUR"}}}</script></html>"""
+        got = linkinfo.parse_jsonld(page)
+        self.assertEqual((got["title"], got["company"], got["location"]), ("IT Support Specialist", "Acme Corp", "Remote"))
+        self.assertIn("Okta", got["description"])
+        self.assertEqual(got["salary"], (62400, 74880))
+
+    def test_board_links_use_apis(self):
+        calls = []
+
+        def fake(url, **kw):
+            calls.append(url)
+            if "greenhouse" in url:
+                return {"title": "Help Desk Analyst", "company_name": "Acme", "location": {"name": "Remote"},
+                        "content": "&lt;p&gt;Pay: $60,000 - $70,000&lt;/p&gt;"}
+            return {"text": "IT Technician", "categories": {"location": "New York, NY"}, "descriptionPlain": "x",
+                    "applyUrl": "https://jobs.lever.co/globex/1/apply", "workplaceType": "hybrid"}
+        orig = linkinfo.http_json
+        linkinfo.http_json = fake
+        try:
+            g = linkinfo.lookup("https://job-boards.greenhouse.io/acme/jobs/123?gh_src=li")
+            l = linkinfo.lookup("https://jobs.lever.co/globex/1")
+        finally:
+            linkinfo.http_json = orig
+        self.assertEqual(calls[0], "https://boards-api.greenhouse.io/v1/boards/acme/jobs/123")
+        self.assertEqual((g["title"], g["company"], g["salary"]), ("Help Desk Analyst", "Acme", (60000, 70000)))
+        self.assertEqual((l["title"], l["company"], l["workplace_hint"]), ("IT Technician", "Globex", "hybrid"))
+
+
+class TrackingTests(unittest.TestCase):
+    def setUp(self):
+        config.set_home(tempfile.mkdtemp())
+        self.con = store.db()
+        now = dt.datetime.now(dt.timezone.utc)
+        for i, (title, missing) in enumerate([("IT Support Specialist", ["okta", "jamf"]),
+                                              ("Senior IT Support Specialist", ["okta"]),
+                                              ("Help Desk Technician", ["servicenow"]),
+                                              ("Nurse", ["cpr"])]):
+            self.con.execute("INSERT INTO jobs (id, title, company, missing, status, score, first_seen, updated) "
+                             "VALUES (?,?,?,?,?,?,?,?)", (f"j{i}", title, "Acme", json.dumps(missing), "new", 70,
+                                                         now.isoformat(), now.isoformat()))
+        self.con.commit()
+
+    def test_heatmap(self):
+        rows = self.con.execute("SELECT title, missing FROM jobs").fetchall()
+        hm = insights.heatmap(rows, ["IT Support Specialist", "Help Desk Technician"])
+        self.assertEqual(hm["skills"][0], ("okta", 2))
+        self.assertEqual(dict(hm["roles"]), {"IT Support Specialist": 2, "Help Desk Technician": 1, "Other": 1})
+        self.assertEqual(hm["roles"][-1][0], "Other")
+        self.assertEqual(hm["cells"][("IT Support Specialist", "okta")], 2)
+
+    def test_status_dates_follow_ups_and_ghosting(self):
+        old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=10)).isoformat()
+        store.set_status(self.con, "j0", "applied", old)
+        store.set_status(self.con, "j1", "applied")
+        store.set_status(self.con, "j2", "interview")
+        due = insights.follow_ups_due(self.con)
+        self.assertEqual([r["id"] for r, _ in due], ["j0"])
+        very_old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=40)).isoformat()
+        self.con.execute("UPDATE jobs SET applied_at=?, updated=? WHERE id='j0'", (very_old, very_old))
+        self.con.commit()
+        self.assertEqual(insights.mark_ghosted(self.con), 1)
+        f = insights.funnel(self.con)
+        self.assertEqual((f["applied"], f["interview"], f["ghosted"], f["waiting"]), (3, 1, 1, 1))
+        store.set_status(self.con, "j2", "offer")
+        self.assertEqual(insights.funnel(self.con)["offer"], 1)
+        store.set_status(self.con, "j2", "new")
+        self.assertIsNone(self.con.execute("SELECT applied_at FROM jobs WHERE id='j2'").fetchone()[0])
+
+    def test_old_database_gets_new_columns(self):
+        import sqlite3
+        home = tempfile.mkdtemp()
+        con = sqlite3.connect(os.path.join(home, "jobs.db"))
+        con.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, title TEXT, status TEXT)")
+        con.commit()
+        con.close()
+        config.set_home(home)
+        cols = {r[1] for r in store.db().execute("PRAGMA table_info(jobs)")}
+        self.assertTrue({"applied_at", "interview_at", "followed_up_at", "closed_at"} <= cols)
+
+
+class PagesTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        config.set_home(tempfile.mkdtemp())
+        p = config._merge(config.DEFAULT_PROFILE, {})
+        p["target_titles"] = ["IT Support Specialist"]
+        p["first_name"] = "Jordan"
+        config.save_profile(p)
+        from jobhunter import web
+        from http.server import ThreadingHTTPServer
+        cls.web = web
+        cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), web.Handler)
+        web.PORT = cls.srv.server_address[1]
+        cls.base = f"http://127.0.0.1:{web.PORT}"
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+
+    def post(self, path, fields):
+        req = urllib.request.Request(self.base + path, data=urllib.parse.urlencode(fields).encode(), method="POST",
+                                     headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req) as r:
+            return r.read().decode()
+
+    def get(self, path):
+        with urllib.request.urlopen(self.base + path) as r:
+            return r.read().decode()
+
+    def test_pages(self):
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        orig = linkinfo.lookup
+        linkinfo.lookup = lambda url: {"title": "IT Support Specialist", "company": "Acme", "location": "Remote",
+                                       "description": "Okta, Jamf and ServiceNow.", "apply_url": url,
+                                       "salary": (60000, 70000), "workplace_hint": "remote"}
+        try:
+            page = self.post("/add", {"url": "https://acme.example/jobs/1?utm_source=x"})
+        finally:
+            linkinfo.lookup = orig
+        self.assertIn("Added IT Support Specialist at Acme", page)
+        row = store.db().execute("SELECT * FROM jobs").fetchone()
+        self.assertEqual((row["url"], row["salary_min"]), ("https://acme.example/jobs/1", 60000))
+
+        skills = self.get("/skills")
+        self.assertIn("IT Support Specialist (1)", skills)
+        self.assertIn("100%", skills)
+        self.assertIn("Showing jobs that ask for", self.get("/?s=new&miss=" + json.loads(row["missing"])[0]))
+
+        self.post("/action", {"id": row["id"], "do": "applied", "back": "/"})
+        self.assertIn("Applied today", self.get("/?s=applied"))
+        progress = self.get("/progress")
+        self.assertIn("Follow-ups due (0)", progress)
+
+        self.post("/answers/add", {"question": "Why do you want to work at {company}?",
+                                   "answer": "I like {company}."})
+        page = self.get("/answers")
+        self.assertIn("Why do you want to work at {company}?", page)
+        self.assertIn("fills in automatically", page)
+        self.assertEqual(answers.find(answers.load(), "Why Globex?", "Globex"), "I like Globex.")
+        self.post("/answers/delete", {"key": "why_company"})
+        self.assertEqual(answers.load(), {})
+
+
+if __name__ == "__main__":
+    unittest.main()
