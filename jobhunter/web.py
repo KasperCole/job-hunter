@@ -53,7 +53,7 @@ pre{white-space:pre-wrap;font:14px/1.5 system-ui,sans-serif;max-height:420px;ove
 a{color:var(--acc)}table.heat th a{color:var(--ink)}.due{color:var(--warn);font-weight:600}.scroll{overflow-x:auto}
 table.heat{border-collapse:collapse;font-size:13px;min-width:100%}table.heat th,table.heat td{border:1px solid var(--line);padding:6px 8px;text-align:center}
 table.heat th{font-weight:600;background:var(--card)}table.heat th.role{text-align:left;white-space:nowrap}table.heat th.sk{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;vertical-align:bottom;padding:8px 4px}
-table.heat td a{color:var(--ink);text-decoration:none;display:block}.bar{height:22px;background:var(--acc);border-radius:5px;min-width:2px}
+table.heat td a{color:var(--ink);text-decoration:none;display:block}.bar{height:22px;background:var(--acc);border-radius:5px;min-width:2px}.bar.rej{background:#c2453b}
 .frow{display:grid;grid-template-columns:150px 1fr 60px;gap:10px;align-items:center;margin:6px 0}
 """
 
@@ -272,7 +272,7 @@ def status_buttons(r, f):
         acts = [post_btn("/action", dict(f, do="interview"), "Got an interview", True)]
         if not r["followed_up_at"]:
             acts.append(post_btn("/action", dict(f, do="followed"), "I followed up"))
-        return acts + [post_btn("/action", dict(f, do="rejected"), "Rejected")]
+        return acts + [post_btn("/action", dict(f, do="rejected"), "Mark rejected")]
     if st == "interview":
         return [post_btn("/action", dict(f, do="offer"), "Got an offer", True),
                 post_btn("/action", dict(f, do="rejected"), "Rejected")]
@@ -280,6 +280,8 @@ def status_buttons(r, f):
         return [post_btn("/action", dict(f, do="interview"), "They replied: interview", True),
                 post_btn("/action", dict(f, do="rejected"), "Rejected"),
                 post_btn("/action", dict(f, do="new"), "Move back to New")]
+    if st == "rejected":
+        return [post_btn("/action", dict(f, do="applied"), "Undo"), post_btn("/action", dict(f, do="new"), "Move back to New")]
     return [post_btn("/action", dict(f, do="new"), "Move back to New")]
 
 
@@ -459,11 +461,11 @@ def progress_page(p, flash=""):
     insights.mark_ghosted(con)
     fn = insights.funnel(con)
     stages = [("Applied", fn["applied"]), ("Heard back", fn["replied"]), ("Interview", fn["interview"]),
-              ("Offer", fn["offer"])]
+              ("Offer", fn["offer"]), ("Rejected", fn["rejected"])]
     top = max(fn["applied"], 1)
-    bars = "".join(f'<div class="frow"><div>{lab}</div><div><div class="bar" style="width:{round(100 * n / top)}%">'
+    bars = "".join(f'<div class="frow"><div>{lab}</div><div><div class="{cls}" style="width:{round(100 * n / top)}%">'
                    f'</div></div><div><b>{n}</b>{f" <span class=mute>({round(100 * n / top)}%)</span>" if fn["applied"] and lab != "Applied" else ""}</div></div>'
-                   for lab, n in stages)
+                   for lab, n, cls in ((lab, n, "bar rej" if lab == "Rejected" else "bar") for lab, n in stages))
     due = insights.follow_ups_due(con)
     due_html = "".join(
         f'<div class="card row"><div><div class="t"><a href="/job?id={urllib.parse.quote(r["id"])}">{esc(r["title"])}</a></div>'
@@ -471,15 +473,42 @@ def progress_page(p, flash=""):
         f'<a class="b" href="{esc(r["url"])}" target="_blank" rel="noopener">Open listing</a>'
         f'{post_btn("/action", {"id": r["id"], "do": "followed", "back": "/progress"}, "I followed up", True)}'
         f'{post_btn("/action", {"id": r["id"], "do": "interview", "back": "/progress"}, "Got an interview")}'
-        f'{post_btn("/action", {"id": r["id"], "do": "rejected", "back": "/progress"}, "Rejected")}</div></div>'
+        f'{post_btn("/action", {"id": r["id"], "do": "rejected", "back": "/progress"}, "Mark rejected")}</div></div>'
         for r, d in due)
+    due_ids = {r["id"] for r, _ in due}
+    act = lambda r, do, label, primary=False: post_btn("/action", {"id": r["id"], "do": do, "back": "/progress"},
+                                                         label, primary)
+    when = lambda iso: ago(iso) or "date unknown"
+    waiting = [r for r in con.execute("SELECT * FROM jobs WHERE status='applied' ORDER BY applied_at DESC").fetchall()
+               if r["id"] not in due_ids]
+    waiting_html = (f'<h2 data-tour="waiting">Waiting to hear back ({len(waiting)})</h2>'
+                    '<p class="mute">Applications you haven\'t heard back on yet. When a company turns you down, click '
+                    '<b>Mark rejected</b> to move the job to your Rejected list.</p>'
+                    + ("".join(
+                        f'<div class="card row"><div><div class="t"><a href="/job?id={urllib.parse.quote(r["id"])}">'
+                        f'{esc(r["title"])}</a></div><div class="mute">{esc(r["company"])} · applied '
+                        f'{when(r["applied_at"])}</div></div><div class="btns">'
+                        f'{act(r, "interview", "Got an interview", True)}{act(r, "rejected", "Mark rejected")}</div></div>'
+                        for r in waiting) or '<p class="mute">Nothing else waiting.</p>'))
+    rejected = con.execute("SELECT * FROM jobs WHERE status='rejected' ORDER BY closed_at DESC").fetchall()
+    rejected_html = (f'<h2 data-tour="rejected">Rejected ({len(rejected)})</h2>'
+                     '<p class="mute">Jobs that turned you down. Marked one by mistake? Click <b>Undo</b> to move it '
+                     'back to Applied.</p>'
+                     + ("".join(
+                         f'<div class="card row"><div><div class="t"><a href="/job?id={urllib.parse.quote(r["id"])}">'
+                         f'{esc(r["title"])}</a></div><div class="mute">{esc(r["company"])}'
+                         f'{" · applied " + when(r["applied_at"]) if r["applied_at"] else ""}'
+                         f' · rejected {when(r["closed_at"])}</div></div><div class="btns">'
+                         f'{act(r, "applied", "Undo")}</div></div>'
+                         for r in rejected) or '<p class="mute">No rejections recorded.</p>'))
     body = f"""{flash_html(flash)}<div class="card" data-tour="funnel"><h2 style="margin-top:0">Your applications</h2>{bars}
 <p class="mute">Waiting to hear back: {fn["waiting"]} · Rejected: {fn["rejected"]} · No reply after {insights.GHOST_DAYS} days: {fn["ghosted"]}.
 Jobs with no news {insights.GHOST_DAYS} days after you applied or followed up move to <a href="/?s=ghosted">Ghosted</a> on their own.</p></div>
 <h2 data-tour="followups">Follow-ups due ({len(due)})</h2>
 <p class="mute">Applications from {insights.FOLLOW_UP_DAYS}+ days ago that you haven't followed up on. A short, polite note to the
 recruiter or hiring manager often gets a reply. Click <b>I followed up</b> once you've sent it.</p>
-{due_html or '<p class="mute">Nothing due right now.</p>'}"""
+{due_html or '<p class="mute">Nothing due right now.</p>'}
+{waiting_html}{rejected_html}"""
     return shell("Progress", body)
 
 
