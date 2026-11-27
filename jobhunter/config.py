@@ -47,6 +47,8 @@ DEFAULT_PROFILE = {
     "target_titles": [],          # plain job titles, e.g. "IT Support Specialist"
     "skills": [],                 # skills found on (or added to) your resume
     "achievements": [],           # resume lines with numbers, used by template cover letters
+    "show_tips": True,            # hover tips and page tours (the "Show tips" box at the top of the app)
+    "tour_seen": [],              # pages whose tour you've finished or skipped
     "search": {
         "keywords": [],           # what to search job boards for (built from your titles)
         "workplace": ["remote", "hybrid", "onsite"],

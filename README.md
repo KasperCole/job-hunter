@@ -68,6 +68,10 @@ Your browser opens the app at `http://127.0.0.1:8765`.
 
 Click **Search for new jobs** once a day to pick up new listings.
 
+## Help inside the app
+
+The first time you open each page, a short tour points out what each part does. Hover over any button (or tab to it with the keyboard) for a one-line explanation. Untick **Show tips** at the top of any page to turn tips and tours off, tick it to bring them back, and click **Take the tour** to replay a page's tour at any time. The setting is saved in your profile, so each person using the app chooses for themselves.
+
 ## Claude-written cover letters (optional)
 
 Create an API key at [console.anthropic.com](https://console.anthropic.com/), then set it before starting the app:

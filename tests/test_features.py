@@ -185,6 +185,21 @@ class QuietServerTests(unittest.TestCase):
         self.assertIn("ValueError: real bug", out.getvalue())
 
 
+class HelpTests(unittest.TestCase):
+    def test_tips_added_to_known_buttons(self):
+        from jobhunter import help as guide
+        out = guide.add_tips('<button class="p">Pre-fill application</button><a href="/?s=applied">Applied (5)</a>'
+                             '<button>Something new</button>')
+        self.assertIn('data-tip="Opens the job', out)
+        self.assertIn('data-tip="Jobs you&#x27;ve applied to', out)
+        self.assertIn("<button>Something new</button>", out)
+
+    def test_every_tour_has_steps(self):
+        from jobhunter import help as guide
+        for page in ("jobs", "job", "progress", "skills", "answers", "settings"):
+            self.assertTrue(guide.TOURS[page])
+
+
 class PagesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -248,6 +263,27 @@ class PagesTests(unittest.TestCase):
         self.post("/answers/delete", {"key": "why_company"})
         self.assertEqual(answers.load(), {})
 
+    def test_tips_and_tour_toggle(self):
+        p = config.load_profile()
+        p.update(show_tips=True, tour_seen=[])
+        config.save_profile(p)
+        page = self.get("/progress")
+        self.assertIn('<body class="tips">', page)
+        self.assertIn("auto=true", page)
+        self.assertIn("Show tips", page)
+        self.post("/tour/seen", {"page": "progress"})
+        self.assertIn("auto=false", self.get("/progress"))
+        self.assertIn("auto=true", self.get("/answers"))
+        self.assertIn("Tips and tours are off", self.post("/tips", {"on": ""}))
+        page = self.get("/answers")
+        self.assertIn('<body class="">', page)
+        self.assertIn("auto=false", page)
+        self.assertIn("Take the tour", page)
+        self.post("/tips", {"on": "1"})
+        self.assertIn("auto=true", self.get("/progress"))
+        self.post("/tour/seen", {"page": "../etc"})
+        self.assertNotIn("../etc", config.load_profile()["tour_seen"])
+
     def test_search_button(self):
         import time
         release = threading.Event()
@@ -265,8 +301,8 @@ class PagesTests(unittest.TestCase):
             self.assertIn("Search for new jobs", self.get("/answers"))
             self.assertIn("Search started", self.post("/search", {}))
             self.assertIn("Searching for new jobs", self.get("/progress"))
-            self.assertIn("location.reload", self.get("/"))
-            self.assertNotIn("location.reload", self.get("/skills"))
+            self.assertIn("setTimeout(tick", self.get("/"))
+            self.assertNotIn("setTimeout(tick", self.get("/skills"))
             self.assertIn("already running", self.post("/search", {}))
             release.set()
             for _ in range(50):

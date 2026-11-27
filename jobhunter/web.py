@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import answers as ab
 from . import config
+from . import help as guide
 from . import insights
 from . import skills as sk
 from .letters import draft_letters
@@ -62,12 +63,12 @@ def search_bar():
     if SEARCH["running"]:
         mins = int((dt.datetime.now() - SEARCH["started"]).total_seconds() // 60) if SEARCH["started"] else 0
         latest = (SEARCH["log"] or ["Starting…"])[-1]
-        return (f'<div class="flash">Searching for new jobs{f" ({mins} min so far)" if mins else ""}. This usually '
+        return (f'<div class="flash" data-tour="search">Searching for new jobs{f" ({mins} min so far)" if mins else ""}. This usually '
                 f'takes 1 to 3 minutes, and you can keep using the app meanwhile. <a href="/">Jobs</a> refreshes on '
                 f'its own.<div class="log">{esc(latest)}</div></div>')
     last = f'<span class="mute">Last search: {esc(SEARCH["finished"])}</span>' if SEARCH["finished"] else ""
     return ('<form method="post" action="/search" class="btns" style="align-items:center;margin:8px 0">'
-            f'<button class="p">Search for new jobs</button>{last}</form>')
+            f'<button class="p" data-tour="search">Search for new jobs</button>{last}</form>')
 
 
 # Reload the job list every few seconds while a search runs, but never while you're typing or have
@@ -79,14 +80,22 @@ if(typing||filled){setTimeout(tick,4000);return;}done=true;location.reload();}
 window.addEventListener('load',function(){setTimeout(tick,4000);});})();</script>"""
 
 
-def shell(title, body, refresh=False, search=True):
+def shell(title, body, refresh=False, search=True, page=None):
     meta = AUTO_REFRESH_JS if refresh else ""
-    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" '
-            f'content="width=device-width,initial-scale=1">{meta}<title>{esc(title)}</title><style>{CSS}</style>'
-            f'</head><body><div class="wrap"><header><h1><a href="/" style="text-decoration:none">Job Hunter</a></h1>'
-            f'<nav style="margin:0"><a href="/">Jobs</a><a href="/progress">Progress</a><a href="/skills">Skills</a>'
-            f'<a href="/answers">Answers</a><a href="/settings">My profile</a></nav></header>'
-            f'{search_bar() if search else ""}{body}</div></body></html>')
+    p = config.load_profile() if search else None
+    show_tips = True if p is None else p.get("show_tips", True) is not False
+    page = page or guide.PAGE_FOR_TITLE.get(title, "job")
+    auto = bool(p) and show_tips and page not in (p.get("tour_seen") or []) and not refresh
+    tour = guide.tour_script(page, auto) if p else ""
+    out = (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" '
+           f'content="width=device-width,initial-scale=1">{meta}<title>{esc(title)}</title>'
+           f'<style>{CSS}{guide.CSS}</style></head><body class="{"tips" if show_tips else ""}"><div class="wrap">'
+           f'<header><h1><a href="/" style="text-decoration:none">Job Hunter</a></h1>'
+           f'<nav style="margin:0" data-tour="nav"><a href="/">Jobs</a><a href="/progress">Progress</a>'
+           f'<a href="/skills">Skills</a><a href="/answers">Answers</a><a href="/settings">My profile</a></nav></header>'
+           f'{guide.tips_bar(show_tips) if p else ""}'
+           f'{search_bar() if search else ""}{body}</div>{tour}</body></html>')
+    return guide.add_tips(out)
 
 
 def post_btn(action, fields, label, primary=False):
@@ -136,10 +145,10 @@ def settings_page(p, flash=""):
     body = f"""{flash_html(flash)}
 <p class="mute">This is what Job Hunter found on your resume. Fix anything that's wrong, then save.
 Your search uses the <b>job titles</b> and <b>search keywords</b>; your <b>skills</b> decide the Match and Fit scores.</p>
-<div class="card"><h2 style="margin-top:0">Resumes</h2><ul>{resumes or '<li class="mute">None yet</li>'}</ul>
+<div class="card" data-tour="resumes"><h2 style="margin-top:0">Resumes</h2><ul>{resumes or '<li class="mute">None yet</li>'}</ul>
 <details><summary>Add another resume</summary>{UPLOAD_FORM.format(heading="Upload another version", extra="For each job, the app uses the resume that covers the most of the skills it asks for.")}</details></div>
 <form method="post" action="/settings">
-<div class="card"><h2 style="margin-top:0">What to look for</h2>
+<div class="card" data-tour="looking-for"><h2 style="margin-top:0">What to look for</h2>
 <label>Job titles you want (one per line)</label><textarea name="target_titles">{esc(_lines(p.get("target_titles")))}</textarea>
 <label>Search keywords sent to job boards (one per line; usually the same as your titles)</label><textarea name="keywords">{esc(_lines(s.get("keywords")))}</textarea>
 <label>Skip jobs whose title contains (comma separated)</label>{inp("exclude_words", ", ".join(s.get("exclude_words") or []))}
@@ -158,7 +167,7 @@ Your search uses the <b>job titles</b> and <b>search keywords</b>; your <b>skill
 <label>Achievements used in template cover letters (one per line, from your resume)</label>
 <textarea name="achievements">{esc(_lines(p.get("achievements")))}</textarea></div>
 
-<div class="card"><h2 style="margin-top:0">Your details (used to fill in applications)</h2><div class="grid">
+<div class="card" data-tour="details"><h2 style="margin-top:0">Your details (used to fill in applications)</h2><div class="grid">
 <div><label>First name</label>{inp("first_name", p.get("first_name"))}</div><div><label>Last name</label>{inp("last_name", p.get("last_name"))}</div>
 <div><label>Email</label>{inp("email", p.get("email"), "email")}</div><div><label>Phone</label>{inp("phone", p.get("phone"))}</div>
 <div><label>City</label>{inp("city", p.get("city"))}</div><div><label>State</label>{inp("state", p.get("state"))}</div>
@@ -294,7 +303,7 @@ def list_page(p, status, wp="", min_fit=0, sort="match", flash="", miss=""):
         dict(s=status, wp=wp, fit=min_fit or "", sort=sort if sort == "fit" else "", miss=miss), **kw).items() if v})
     nav = "".join(f'<a class="{"on" if s == status else ""}" href="{link(s=s)}">{s.title()} ({counts[s]})</a>'
                   for s in STATUSES)
-    filt = ('<nav><span class="lab">Where:</span>'
+    filt = ('<nav data-tour="filters"><span class="lab">Where:</span>'
             + "".join(f'<a class="{"on" if v == wp else ""}" href="{link(wp=v)}">{lab}</a>'
                       for v, lab in (("", "All"), ("remote", "Remote"), ("hybrid", "Hybrid"), ("onsite", "On-site")))
             + '<span class="lab">Fit:</span>'
@@ -324,14 +333,14 @@ def list_page(p, status, wp="", min_fit=0, sort="match", flash="", miss=""):
         sal = salary_str(r)
         missing = json.loads(r["missing"] or "[]")
         wp_label = {"remote": "Remote", "hybrid": "Hybrid", "onsite": "On-site"}.get(r["workplace"], "")
-        cards.append(f"""<div class="card"><div class="row"><div>
+        cards.append(f"""<div class="card" data-tour="card"><div class="row"><div>
 <div class="t"><a href="/job?id={urllib.parse.quote(r['id'])}">{esc(r['title'])}</a><span class="pill">{wp_label}</span></div>
 <div class="mute">{esc(r['company'])} · {esc(r['location'] or '')}{' · ' + sal if sal else ''} · {esc(r['source'])}</div>
 <div class="why">{esc(r['reasons'] or '')}</div>
 {f'<div class="why">{track_line(r)}</div>' if r['applied_at'] or r['interview_at'] else ''}
 {f'<div class="why">Missing: {esc(", ".join(sk.display(m) for m in missing[:8]))}</div>' if missing else ''}</div>
-<span class="score" title="Match: how well the job fits what you're looking for. Fit: share of the listing's skills that are on your resume.">Match {r['score']} · Fit {r['fit']}</span></div>
-<div class="btns">{''.join(acts)}</div></div>""")
+<span class="score tip-r" tabindex="0" data-tip="Match: how well the job fits what you're looking for (title, skills, pay, location). Fit: how much of the listing's skill list is on your resume.">Match {r['score']} · Fit {r['fit']}</span></div>
+<div class="btns" data-tour="card-actions">{''.join(acts)}</div></div>""")
     if not cards:
         cards.append('<p class="mute">Nothing here yet. Click <b>Search for new jobs</b>.</p>' if status == "new"
                      else '<p class="mute">Nothing here yet.</p>')
@@ -341,7 +350,7 @@ def list_page(p, status, wp="", min_fit=0, sort="match", flash="", miss=""):
         '<p class="mute">Searches for: '
         + esc(", ".join((p["search"].get("keywords") or p.get("target_titles") or [])[:6]) or "nothing yet: add job titles in My profile")
         + ". Change this in My profile.</p>")
-    add = """<details class="card"><summary><b>Add a job you found yourself</b></summary>
+    add = """<details class="card" data-tour="add"><summary><b>Add a job you found yourself</b></summary>
 <p class="mute">Paste the link and click Add job. Job Hunter reads the title, company, location, pay and
 description from the posting. Greenhouse, Lever and Ashby links always work; most other career sites do too.
 If a site can't be read, fill in the details below yourself.</p>
@@ -355,7 +364,7 @@ If a site can't be read, fill in the details below yourself.</p>
     body = (f"{flash_html(flash)}{search_box}<p class='mute'><b>Match</b> = how well the job fits what you're "
             "looking for (title, skills, pay, location). <b>Fit</b> = how many of the listing's skills are on your "
             f"resume. Pre-fill opens the application with your details filled in; you check it and click Submit.</p>"
-            f"<nav>{nav}</nav>{filt}{''.join(cards)}{add}")
+            f"<nav data-tour=\"tabs\">{nav}</nav>{filt}{''.join(cards)}{add}")
     return shell("Job Hunter", body, refresh=running)
 
 
@@ -373,21 +382,21 @@ def job_page(p, job_id, flash=""):
     body = f"""<p><a href="/?s={r['status']}">&larr; Back</a></p>{flash_html(flash)}
 <h1>{esc(r['title'])}</h1><p class="mute">{esc(r['company'])} · {esc(r['location'] or '')} · {esc(r['workplace'] or '')} ·
 {salary_str(r) or 'pay not listed'} · status: {r['status']}</p>
-<div class="btns">{post_btn('/action', dict(f, do='fill'), 'Pre-fill application', True)}
+<div class="btns" data-tour="job-actions">{post_btn('/action', dict(f, do='fill'), 'Pre-fill application', True)}
 <a class="b" href="{esc(r['apply_url'])}" target="_blank" rel="noopener">Open listing</a>
 {post_btn('/action', dict(f, do='applied'), 'Mark applied')}{post_btn('/action', dict(f, do='regen'), 'Rewrite cover letter')}
 {post_btn('/action', dict(f, do='skipped', back='/'), 'Skip')}</div>
-<div class="card"><b>Match {r['score']}/100</b> <span class="mute">{esc(r['reasons'] or '')}</span><br>
+<div class="card" data-tour="scores"><b>Match {r['score']}/100</b> <span class="mute">{esc(r['reasons'] or '')}</span><br>
 <b>Fit {r['fit']}/100 ({esc(r['fit_label'] or '')})</b> <span class="mute">share of this listing's skills that are on your resume</span><br>
 <b>You have:</b> {esc(", ".join(matched) or "none of the skills it lists")}<br>
 <b>Missing:</b> {esc(", ".join(missing) or "nothing it lists")}
 {('<br><b>Watch:</b> ' + esc("; ".join(flags))) if flags else ''}<br><b>Resume used:</b> {esc(rname)}</div>
-<div class="card"><b>Cover letter</b> <span class="mute">(edit and save; pre-fill uses this text)</span>
+<div class="card" data-tour="letter"><b>Cover letter</b> <span class="mute">(edit and save; pre-fill uses this text)</span>
 <form method="post" action="/letter"><input type="hidden" name="id" value="{esc(job_id)}">
 <textarea class="letter" name="letter">{esc(r['cover_letter'] or '')}</textarea>
 <div class="btns"><button class="p">Save letter</button></div></form></div>
 <div class="card"><b>Job description</b><pre>{esc(r['description'] or '')}</pre></div>"""
-    return shell(r["title"], body)
+    return shell(r["title"], body, page="job")
 
 
 # --------------------------------------------------------------------------- skills / progress / answers
@@ -409,7 +418,7 @@ def skills_page(p, scope="active", days=0):
     hm = insights.heatmap(rows, targets)
     link = lambda **kw: "/skills?" + urllib.parse.urlencode(
         {k: v for k, v in dict(dict(scope=scope, days=days or ""), **kw).items() if v})
-    filt = ('<nav><span class="lab">Jobs:</span>'
+    filt = ('<nav data-tour="skill-filters"><span class="lab">Jobs:</span>'
             + "".join(f'<a class="{"on" if k == scope else ""}" href="{link(scope=k)}">{esc(v[0])}</a>'
                       for k, v in SCOPES.items())
             + '<span class="lab">Found in:</span>'
@@ -438,7 +447,7 @@ def skills_page(p, scope="active", days=0):
             tds.append(f'<td{style} title="{c} of {n} {esc(role)} jobs ask for {esc(sk.display(sname))}">'
                        f'<a href="/?s=new&miss={urllib.parse.quote(sname)}">{f"{pct}%" if c else ""}</a></td>')
         body_rows.append(f'<tr><th class="role">{esc(role)} ({n})</th>{"".join(tds)}</tr>')
-    table = f'<div class="card scroll"><table class="heat">{head}{"".join(body_rows)}</table></div>'
+    table = f'<div class="card scroll" data-tour="heat"><table class="heat">{head}{"".join(body_rows)}</table></div>'
     top = ", ".join(f"{sk.display(sname)} ({n} jobs)" for sname, n in hm["skills"][:3])
     return shell("Skills", f"{intro}{filt}<p><b>Missing most often:</b> {esc(top)}</p>{table}"
                  f"<p class='mute'>Based on {len(rows)} jobs. Roles come from the job titles in your profile; "
@@ -464,10 +473,10 @@ def progress_page(p, flash=""):
         f'{post_btn("/action", {"id": r["id"], "do": "interview", "back": "/progress"}, "Got an interview")}'
         f'{post_btn("/action", {"id": r["id"], "do": "rejected", "back": "/progress"}, "Rejected")}</div></div>'
         for r, d in due)
-    body = f"""{flash_html(flash)}<div class="card"><h2 style="margin-top:0">Your applications</h2>{bars}
+    body = f"""{flash_html(flash)}<div class="card" data-tour="funnel"><h2 style="margin-top:0">Your applications</h2>{bars}
 <p class="mute">Waiting to hear back: {fn["waiting"]} · Rejected: {fn["rejected"]} · No reply after {insights.GHOST_DAYS} days: {fn["ghosted"]}.
 Jobs with no news {insights.GHOST_DAYS} days after you applied or followed up move to <a href="/?s=ghosted">Ghosted</a> on their own.</p></div>
-<h2>Follow-ups due ({len(due)})</h2>
+<h2 data-tour="followups">Follow-ups due ({len(due)})</h2>
 <p class="mute">Applications from {insights.FOLLOW_UP_DAYS}+ days ago that you haven't followed up on. A short, polite note to the
 recruiter or hiring manager often gets a reply. Click <b>I followed up</b> once you've sent it.</p>
 {due_html or '<p class="mute">Nothing due right now.</p>'}"""
@@ -484,7 +493,7 @@ def answers_page(flash=""):
                   '<span class="pill" style="color:var(--acc)">fills in automatically</span>')
         variants = e.get("variants") or []
         also = (f'<div class="why">Also asked as: {esc("; ".join(variants[:4]))}</div>' if variants else "")
-        cards.append(f"""<div class="card"><div class="row"><div><div class="t">{esc(e.get("question") or key)}{status}</div>
+        cards.append(f"""<div class="card" data-tour="answer"><div class="row"><div><div class="t">{esc(e.get("question") or key)}{status}</div>
 <div class="mute">Seen on {e.get("seen", 0)} application{"s" if e.get("seen", 0) != 1 else ""} · filled {e.get("uses", 0)} time{"s" if e.get("uses", 0) != 1 else ""}</div>{also}</div></div>
 <form method="post" action="/answers/save"><input type="hidden" name="key" value="{esc(key)}">
 <textarea name="answer" placeholder="Your answer">{esc(e.get("answer") or "")}</textarea>
@@ -497,7 +506,7 @@ Similar questions, like "Why do you want to work at Acme?" and "What interests y
 <p class="mute">Write <code>{{company}}</code> and <code>{{title}}</code> in an answer and they're replaced with each job's
 company and title. Answers marked <b>check before reuse</b> named a specific company; edit them so they fit any
 company, then save. You still review every form before you submit it.</p>
-<details class="card"><summary><b>Add a question</b></summary><form method="post" action="/answers/add">
+<details class="card" data-tour="add-question"><summary><b>Add a question</b></summary><form method="post" action="/answers/add">
 <label>Question</label><input type="text" name="question" required placeholder="Why do you want to work at {{company}}?">
 <label>Your answer</label><textarea name="answer"></textarea><div class="btns"><button class="p">Add</button></div></form></details>
 {"".join(cards) or '<p class="mute">No questions yet. They appear here after you pre-fill an application.</p>'}"""
@@ -634,6 +643,21 @@ class Handler(BaseHTTPRequestHandler):
             p["resumes"] = [r for r in p.get("resumes") or [] if r["file"] != g("file")]
             config.save_profile(p)
             return self._redirect("/settings", "Resume removed from your profile (the file is still in my-data/resumes).")
+        if self.path == "/tips":
+            p["show_tips"] = bool(g("on"))
+            if p["show_tips"]:
+                p["tour_seen"] = []          # turning tips back on replays each page's tour once
+            config.save_profile(p)
+            back = urllib.parse.urlparse(self.headers.get("Referer") or "/").path or "/"
+            return self._redirect(back if back.startswith("/") else "/",
+                                  "Tips and tours are on." if p["show_tips"] else
+                                  "Tips and tours are off. Tick Show tips at the top to bring them back.")
+        if self.path == "/tour/seen":
+            page = g("page")
+            if page in guide.TOURS and page not in (p.get("tour_seen") or []):
+                p["tour_seen"] = (p.get("tour_seen") or []) + [page]
+                config.save_profile(p)
+            return self._send("ok")
         if self.path == "/search":
             started = _start_search()
             return self._redirect("/", "Search started. New matches appear under New when it finishes."
