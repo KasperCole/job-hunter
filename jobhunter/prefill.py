@@ -9,7 +9,7 @@ import re
 import sys
 import webbrowser
 
-from . import config
+from . import answers, config
 from .letters import draft_letters, full_name
 from .store import db
 
@@ -27,7 +27,7 @@ FIELD_RULES = [
     (r"zip|postal", "postal_code"),
     (r"^state\b|state/province|province", "state"),
     (r"^city\b", "city_only"),
-    (r"(current )?location|where are you (located|based)|city", "city"),
+    (r"(current )?location|where are you (located|based)|\bcity\b", "city"),
     (r"country", "country"),
     (r"salary|compensation|pay expectation", "salary"),
     (r"notice period|start date|when can you start|availability", "notice_period"),
@@ -71,7 +71,9 @@ LABEL_JS = r"""
     label = (label || el.getAttribute('aria-label') || el.placeholder || el.name || el.id || '').trim();
     el.setAttribute('data-jh', String(i));
     out.push({idx: i, tag: el.tagName.toLowerCase(), type: (el.type || '').toLowerCase(), name: el.name || '',
-              label: label.slice(0, 200), filled: el.tagName === 'SELECT' ? el.selectedIndex > 0 : !!el.value});
+              label: label.slice(0, 200), filled: el.tagName === 'SELECT' ? el.selectedIndex > 0 : !!el.value,
+              value: el.tagName === 'SELECT' ? (el.selectedIndex > 0 ? el.options[el.selectedIndex].text : '')
+                     : (['checkbox', 'radio', 'file', 'password'].includes((el.type || '').toLowerCase()) ? '' : (el.value || ''))});
   });
   return out;
 }
@@ -134,10 +136,9 @@ def fill(job_id, profile):
             print(f"Pre-filled {n} fields for {row['title']} at {row['company']}.")
             print("Check the form, answer anything left blank, and click Submit yourself. "
                   "Close the browser window when you're done.")
-            try:
-                page.wait_for_event("close", timeout=0)
-            except Exception:
-                pass
+            learned = watch_answers(page, row)
+            if learned:
+                print(f"Saved {learned} new answer(s) to your answer bank for next time.")
             try:
                 ctx.close()
             except Exception:
@@ -149,8 +150,56 @@ def fill(job_id, profile):
         webbrowser.open(row["apply_url"])
 
 
+def custom_questions(fields):
+    """{label: value} for the questions on this page that your profile doesn't cover ("" if unanswered)."""
+    out = {}
+    for f in fields:
+        if f["type"] in ("file", "password", "checkbox", "radio", "submit", "button", "search", "hidden"):
+            continue
+        label = f["label"]
+        if not label or (not answers.topic_of(label) and any(re.search(pat, label.lower()) for pat, _ in FIELD_RULES)):
+            continue
+        if answers.usable_label(label):
+            out[label] = (f.get("value") or "").strip()
+    return out
+
+
+def watch_answers(page, row):
+    """While the window is open, note the questions and what you type into them; save it when you close it."""
+    seen = {}
+    while True:
+        try:
+            if page.is_closed():
+                break
+            for frame in page.frames:
+                try:
+                    for label, value in custom_questions(frame.evaluate(LABEL_JS)).items():
+                        if value or label not in seen:
+                            seen[label] = value
+                except Exception:
+                    continue
+            page.wait_for_timeout(2000)
+        except Exception:
+            break
+    if not seen:
+        return 0
+    bank = answers.load()
+    answers.note_seen(bank, seen.keys(), row["id"], row["company"])
+    n = sum(answers.learn(bank, label, value, row["company"], row["title"]) for label, value in seen.items())
+    answers.save(bank)
+    return n
+
+
 def fill_page(page, row, profile, resume, letter_path):
     count = 0
+    bank = answers.load()
+    used = False
+    for frame in page.frames:
+        try:
+            used |= answers.note_seen(bank, custom_questions(frame.evaluate(LABEL_JS)).keys(), row["id"],
+                                      row["company"])
+        except Exception:
+            continue
     for frame in page.frames:
         try:
             fields = frame.evaluate(LABEL_JS)
@@ -172,22 +221,36 @@ def fill_page(page, row, profile, resume, letter_path):
                     continue
                 if f["filled"] or f["type"] in ("checkbox", "radio", "submit", "button", "search"):
                     continue
-                key = next((k for pat, k in FIELD_RULES if re.search(pat, label)), None)
+                key = (None if answers.topic_of(f["label"], row["company"])
+                       else next((k for pat, k in FIELD_RULES if re.search(pat, label)), None))
                 val = field_value(key, row, profile) if key else ""
+                if not val and not key:
+                    val = answers.find(bank, f["label"], row["company"], row["title"])
+                    if val:
+                        key = "saved answer"
                 if not val:
                     continue
                 if f["tag"] == "select":
                     opts = frame.eval_on_selector(sel, "s => [...s.options].map(o => o.text)")
-                    pick = next((o for o in opts if o.strip().lower().startswith(val.lower()[:3])), None)
+                    pick = (next((o for o in opts if o.strip().lower() == val.strip().lower()), None)
+                            or next((o for o in opts if o.strip().lower().startswith(val.lower()[:3])), None))
                     if pick:
                         frame.select_option(sel, label=pick)
                         count += 1
+                        if key == "saved answer":
+                            answers.mark_used(bank, f["label"], row["company"])
+                            used = True
                     continue
                 if key == "cover_letter" and f["tag"] != "textarea":
                     continue
                 frame.fill(sel, val)
                 print(f"  {key} -> {f['label'][:60]}")
                 count += 1
+                if key == "saved answer":
+                    answers.mark_used(bank, f["label"], row["company"])
+                    used = True
             except Exception:
                 continue
+    if used:
+        answers.save(bank)
     return count
