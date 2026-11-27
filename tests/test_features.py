@@ -277,6 +277,7 @@ class PagesTests(unittest.TestCase):
         page = self.get("/progress")
         self.assertIn("Initech", page.split('data-tour="rejected"')[1])
         self.assertIn("rejected today", page)
+        self.assertIn('<div class="frow"><div>Rejected</div><div><div class="bar rej"', page)
         self.assertIsNotNone(con.execute("SELECT closed_at FROM jobs WHERE id='rj1'").fetchone()[0])
         self.post("/action", {"id": "rj1", "do": "applied", "back": "/progress"})
         row = con.execute("SELECT status, closed_at, applied_at FROM jobs WHERE id='rj1'").fetchone()
