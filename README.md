@@ -24,12 +24,13 @@ Job Hunter only uses official public APIs and companies' own public job boards. 
 | Source | Covers | Key needed |
 |---|---|---|
 | Company career sites on Greenhouse, Lever and Ashby (list in `data/companies.json`) | Remote, hybrid and on-site jobs at about 100 companies. You apply directly on the company's site. | No |
+| Bank and credit union career sites on Workday (also in `data/companies.json`) | Jobs at banks such as PNC, Capital One, U.S. Bank and Truist, credit unions such as BECU and SECU, and banking-software companies such as Fiserv, FIS, Q2 and Alkami. Only jobs whose title is close to one of your target titles are kept. To add another bank or credit union, copy the address of its careers page (it looks like `https://<company>.wd5.myworkdayjobs.com/<site>`) into the `workday` list. | No |
 | The Muse | Jobs in your city, plus remote jobs | No |
 | Remotive, RemoteOK, Himalayas, Jobicy | Remote jobs | No |
 | [Adzuna](https://developer.adzuna.com/) | Jobs at local employers in any US city, within a distance you choose. The best source for on-site and hybrid work. | Free |
 | [USAJOBS](https://developer.usajobs.gov/) | US federal government jobs | Free |
 
-To add a single job you found yourself, paste its link into **Add a job you found yourself** on the Jobs page. Job Hunter reads the title, company, location, pay and description from the posting (Greenhouse, Lever and Ashby links always work, and most other career sites do too).
+To add a single job you found yourself, paste its link into **Add a job you found yourself** on the Jobs page. Job Hunter reads the title, company, location, pay and description from the posting (Greenhouse, Lever, Ashby and Workday links always work, and most other career sites do too).
 
 To add a company, find the board name in its careers link (`boards.greenhouse.io/<name>`, `jobs.lever.co/<name>` or `jobs.ashbyhq.com/<name>`) and add it to `data/companies.json`, or to `my-data/companies.json` to keep your list private.
 

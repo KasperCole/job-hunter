@@ -2,7 +2,8 @@
 no logins, no scraping of sites whose terms forbid it (LinkedIn, Indeed, Glassdoor).
 
 No key needed:  Remotive, RemoteOK, Himalayas, Jobicy (remote jobs), The Muse (city + remote),
-                and company boards on Greenhouse, Lever and Ashby (data/companies.json).
+                and company boards on Greenhouse, Lever, Ashby and Workday (data/companies.json).
+                Workday is the careers site most banks and credit unions use.
 Free key:       Adzuna (any US city with a radius; best for on-site and hybrid),
                 USAJOBS (US federal government jobs).
 """
@@ -11,11 +12,14 @@ import datetime as dt
 import html
 import json
 import re
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
 from .config import UA, load_companies
 from .locations import workplace
+from .matching import title_score
 
 
 def http_json(url, timeout=25, headers=None):
@@ -285,6 +289,90 @@ def src_ashby(board):
     return out
 
 
+# --------------------------------------------------------------------------- Workday career sites
+# Most banks and credit unions (and many banking-software companies) post jobs on Workday. Each entry in
+# companies.json "workday" is {"name": "PNC", "url": "https://pnc.wd5.myworkdayjobs.com/External"}: the
+# address of the company's careers page. The site's own search is used with your target titles, and only
+# jobs whose title is close to one of them are kept, since a bank's board can hold thousands of jobs.
+
+def http_post_json(url, payload, timeout=25, tries=4, sleep=time.sleep):
+    """POST JSON and read JSON back. Workday answers bursts with HTTP 429, so wait and try again."""
+    for attempt in range(tries):
+        req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST",
+                                     headers={"User-Agent": UA, "Accept": "application/json",
+                                              "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode("utf-8", "replace"))
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == tries - 1:
+                raise
+            try:
+                wait = int(e.headers.get("Retry-After") or 0)
+            except ValueError:
+                wait = 0
+            sleep(min(wait or 5 * (attempt + 1), 30))
+
+
+def workday_base(url):
+    """The API address for a Workday careers page, plus the page's scheme://host/site prefix."""
+    u = urllib.parse.urlsplit(url)
+    tenant = u.netloc.split(".")[0]
+    parts = [p for p in u.path.split("/") if p and not re.fullmatch(r"[a-z]{2}-[A-Z]{2}", p)]
+    if not parts:
+        raise ValueError(f"No careers site name in {url}")
+    return f"{u.scheme}://{u.netloc}/wday/cxs/{tenant}/{parts[0]}", f"{u.scheme}://{u.netloc}/{parts[0]}", tenant
+
+
+def _workday_mode(remote_type, text):
+    rt, low = (remote_type or "").lower(), (text or "").lower()
+    # "Home Location-XX" is how several banks (PNC, U.S. Bank) label work-from-home roles.
+    if "remote" in rt or "remote" in low or "virtual" in low or "home location" in low:
+        return "remote"
+    if "hybrid" in rt or "flex" in rt or "hybrid" in low:
+        return "hybrid"
+    return "onsite" if rt or low.strip() else None
+
+
+def src_workday(entry, terms, targets, fetch=None, post=None, sleep=time.sleep):
+    fetch, post = fetch or http_json, post or http_post_json
+    base, site, tenant = workday_base(entry["url"])
+    seen, out = set(), []
+    details_blocked = False        # once a board refuses detail pages, stop asking (saves minutes of waiting)
+    for term in terms:
+        data = post(base + "/jobs", {"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": term})
+        for p in data.get("jobPostings") or []:
+            path = p.get("externalPath")
+            if not path or path in seen or title_score(p.get("title") or "", targets)[0] < 20:
+                continue
+            seen.add(path)
+            info = {}
+            for attempt in range(0 if details_blocked else 2):
+                try:
+                    info = fetch(base + path).get("jobPostingInfo") or {}
+                    break
+                except urllib.error.HTTPError as e:
+                    if e.code != 429:
+                        break
+                    if attempt == 1:
+                        details_blocked = True
+                    else:
+                        sleep(5)
+                except Exception:
+                    break
+            # When the detail page is refused, the job is still kept from the search result.
+            title = info.get("title") or p.get("title")
+            loc = ", ".join(x for x in [info.get("location") or p.get("locationsText") or ""]
+                            + list(info.get("additionalLocations") or []) if x)
+            mode = _workday_mode(info.get("remoteType") or p.get("remoteType"), f"{loc} {title}")
+            desc = strip_html(info.get("jobDescription"))
+            url = info.get("externalUrl") or site + path
+            out.append(job("workday", f"{tenant}-{path.rsplit('_', 1)[-1]}", title, entry.get("name") or tenant.title(),
+                           loc or ("Remote" if mode == "remote" else ""), url, url.rstrip("/") + "/apply", desc,
+                           parse_date(info.get("startDate")), parse_salary(pay_line(desc)), mode))
+    return out
+
+
 # --------------------------------------------------------------------------- all together
 
 def query_from_profile(profile):
@@ -311,6 +399,10 @@ def fetch_all(profile, log=print):
     tasks += [(f"Greenhouse/{b}", src_greenhouse, b) for b in comps.get("greenhouse", [])]
     tasks += [(f"Lever/{c}", src_lever, c) for c in comps.get("lever", [])]
     tasks += [(f"Ashby/{b}", src_ashby, b) for b in comps.get("ashby", [])]
+    targets = profile.get("target_titles") or q["keywords"]
+    terms = profile.get("workday_search") or q["keywords"] or targets
+    tasks += [(f"Workday/{w.get('name')}", lambda w: src_workday(w, terms, targets), w)
+              for w in comps.get("workday", []) if isinstance(w, dict) and w.get("url") and terms]
     results, failed, boards = [], [], 0
     with cf.ThreadPoolExecutor(max_workers=12) as ex:
         futs = {ex.submit(fn, arg): name for name, fn, arg in tasks}

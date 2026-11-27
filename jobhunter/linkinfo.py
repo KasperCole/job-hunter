@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 
 from .config import UA
-from .sources import http_json, pay_line, parse_salary, strip_html
+from .sources import http_json, pay_line, parse_salary, strip_html, workday_base
 
 TRACKING = re.compile(r"^(utm_.*|gh_src|ref|refid|referrer|source|src|trk|trkinfo|lipi|lever-source|"
                       r"lever-origin|fbclid|gclid|mc_cid|mc_eid|_hs.*|ccuid)$", re.I)
@@ -62,6 +62,23 @@ def from_ashby(board, jid, url):
                            j.get("descriptionPlain") or strip_html(j.get("descriptionHtml")),
                            j.get("applyUrl") or url, parse_salary(comp), hint)
     raise LookupError("That job isn't on the company's Ashby board any more.")
+
+
+def from_workday(url):
+    base, site, _ = workday_base(url)
+    path = urllib.parse.urlsplit(url).path
+    i = path.find("/job/")
+    if i < 0:
+        raise LookupError("That Workday link isn't a single job.")
+    data = http_json(base + path[i:])
+    info = data.get("jobPostingInfo") or {}
+    desc = strip_html(info.get("jobDescription"))
+    org = (data.get("hiringOrganization") or {}).get("name") or ""
+    rt = (info.get("remoteType") or "").lower()
+    hint = "remote" if "remote" in rt else "hybrid" if "hybrid" in rt else None
+    return _result(info.get("title"), org or site.split("//")[1].split(".")[0].title(),
+                   info.get("location") or "", desc, info.get("externalUrl") or url,
+                   parse_salary(pay_line(desc)), hint)
 
 
 def _first(x):
@@ -140,4 +157,6 @@ def lookup(url):
         return from_lever(parts[0], parts[1], url)
     if host == "jobs.ashbyhq.com" and len(parts) >= 2:
         return from_ashby(parts[0], parts[1], url)
+    if host.endswith("myworkdayjobs.com") and "/job/" in u.path:
+        return from_workday(url)
     return from_page(url)

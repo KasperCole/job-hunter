@@ -1,4 +1,4 @@
-"""Offline tests for the answer bank, skills heat map, follow-up tracking and paste-a-link."""
+"""Offline tests for the answer bank, skills heat map, follow-up tracking, paste-a-link and Workday boards."""
 import datetime as dt
 import json
 import os
@@ -13,7 +13,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from jobhunter import answers, config, insights, linkinfo, prefill, store  # noqa: E402
+from jobhunter import answers, config, insights, linkinfo, prefill, sources, store  # noqa: E402
 
 
 class AnswerBankTests(unittest.TestCase):
@@ -71,6 +71,113 @@ class AnswerBankTests(unittest.TestCase):
                   {"label": "Resume", "type": "file", "value": ""}]
         got = prefill.custom_questions(fields)
         self.assertEqual(got, {"Why do you want to work here?": "Because", "Race / Ethnicity": ""})
+
+
+class WorkdayTests(unittest.TestCase):
+    ENTRY = {"name": "Example Bank", "url": "https://examplebank.wd5.myworkdayjobs.com/en-US/External"}
+
+    def test_base_from_careers_page(self):
+        base, site, tenant = sources.workday_base(self.ENTRY["url"])
+        self.assertEqual(base, "https://examplebank.wd5.myworkdayjobs.com/wday/cxs/examplebank/External")
+        self.assertEqual((site, tenant), ("https://examplebank.wd5.myworkdayjobs.com/External", "examplebank"))
+
+    def test_search_keeps_matching_titles(self):
+        posts, fetched = [], []
+
+        def post(url, payload):
+            posts.append((url, payload["searchText"]))
+            return {"jobPostings": [
+                {"title": "Technology Support Analyst", "externalPath": "/job/Home-Location-PA/Tech-Support_R100",
+                 "locationsText": "Home Location-PA"},
+                {"title": "Branch Teller", "externalPath": "/job/Pittsburgh/Teller_R200", "locationsText": "Pittsburgh, PA"},
+                {"title": "Client Support Specialist", "externalPath": "/job/Cleveland/Client-Support_R300",
+                 "locationsText": "Cleveland, OH"}]}
+
+        def fetch(url):
+            fetched.append(url)
+            if url.endswith("R300"):
+                raise urllib.error.HTTPError(url, 429, "Too Many Requests", {}, None)
+            return {"jobPostingInfo": {"title": "Technology Support Analyst", "location": "Home Location-PA",
+                                       "jobDescription": "<p>Pay range: $55,000 - $65,000 per year</p>",
+                                       "startDate": "2026-11-20"}}
+
+        jobs = sources.src_workday(self.ENTRY, ["technology support", "client support"],
+                                   ["Technology Support Analyst", "Client Support Specialist"],
+                                   fetch=fetch, post=post, sleep=lambda s: None)
+        self.assertEqual(len(posts), 2)
+        self.assertEqual([j["title"] for j in jobs], ["Technology Support Analyst", "Client Support Specialist"])
+        tech, client = jobs
+        self.assertEqual((tech["company"], tech["workplace"], tech["salary_min"]), ("Example Bank", "remote", 55000))
+        self.assertEqual(tech["id"], "workday:examplebank-R100")
+        self.assertTrue(tech["apply_url"].endswith("/apply"))
+        # The detail page was refused, so the job is kept from the search result.
+        self.assertEqual((client["location"], client["workplace"]), ("Cleveland, OH", "onsite"))
+        self.assertEqual(client["url"], "https://examplebank.wd5.myworkdayjobs.com/External/job/Cleveland/Client-Support_R300")
+
+    def test_post_retries_rate_limit(self):
+        calls, waits = [], []
+
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return b'{"jobPostings": []}'
+
+        def opener(req, timeout=0):
+            calls.append(req.full_url)
+            if len(calls) < 3:
+                raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", {"Retry-After": "2"}, None)
+            return Resp()
+
+        orig = urllib.request.urlopen
+        urllib.request.urlopen = opener
+        try:
+            got = sources.http_post_json("https://x.wd1.myworkdayjobs.com/wday/cxs/x/y/jobs", {}, sleep=waits.append)
+        finally:
+            urllib.request.urlopen = orig
+        self.assertEqual(got, {"jobPostings": []})
+        self.assertEqual((len(calls), waits), (3, [2, 2]))
+
+    def test_shipped_boards_and_my_data_merge(self):
+        comps = config.load_companies()
+        self.assertTrue(any(w["name"] == "PNC" for w in comps["workday"]))
+        for w in comps["workday"]:
+            sources.workday_base(w["url"])
+        with tempfile.TemporaryDirectory() as d:
+            extra = {"workday": [{"name": "My CU", "url": "https://mycu.wd1.myworkdayjobs.com/Careers"},
+                                 comps["workday"][0]]}
+            orig_path = config.path
+            config.path = lambda name: os.path.join(d, name)
+            try:
+                with open(os.path.join(d, "companies.json"), "w") as f:
+                    json.dump(extra, f)
+                merged = config.load_companies()
+            finally:
+                config.path = orig_path
+        self.assertEqual(len(merged["workday"]), len(comps["workday"]) + 1)
+        self.assertEqual(merged["workday"][-1]["name"], "My CU")
+
+    def test_workday_link_lookup(self):
+        seen = []
+
+        def fake(url, **kw):
+            seen.append(url)
+            return {"jobPostingInfo": {"title": "Solution Center Analyst", "location": "Remote - US",
+                                       "remoteType": "Fully Remote", "jobDescription": "<p>Help members.</p>"},
+                    "hiringOrganization": {"name": "Example Credit Union"}}
+        orig = linkinfo.http_json
+        linkinfo.http_json = fake
+        try:
+            got = linkinfo.lookup("https://excu.wd1.myworkdayjobs.com/en-US/Careers/job/Remote/Solution-Center_R9?source=LinkedIn")
+        finally:
+            linkinfo.http_json = orig
+        self.assertEqual(seen, ["https://excu.wd1.myworkdayjobs.com/wday/cxs/excu/Careers/job/Remote/Solution-Center_R9"])
+        self.assertEqual((got["title"], got["company"], got["workplace_hint"]),
+                         ("Solution Center Analyst", "Example Credit Union", "remote"))
 
 
 class LinkTests(unittest.TestCase):

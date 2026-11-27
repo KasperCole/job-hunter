@@ -1,5 +1,5 @@
 {
-  "_note": "Company job boards checked on every search. Add a company by the board name in its careers link: boards.greenhouse.io/<name>, jobs.lever.co/<name>, jobs.ashbyhq.com/<name>. Names that don't exist are skipped. To add your own without editing this file, create my-data/companies.json with the same layout.",
+  "_note": "Company job boards checked on every search. Add a company by the board name in its careers link: boards.greenhouse.io/<name>, jobs.lever.co/<name>, jobs.ashbyhq.com/<name>. Names that don't exist are skipped. To add your own without editing this file, create my-data/companies.json with the same layout. Workday careers sites (used by most banks and credit unions) go under \"workday\" as {\"name\": \"...\", \"url\": \"https://<company>.wd<N>.myworkdayjobs.com/<site>\"}: copy the address of the careers page.",
   "greenhouse": [
     "1stdibs",
     "affirm",
@@ -42,6 +42,7 @@
     "marqeta",
     "mercury",
     "mongodb",
+    "ncinoinc",
     "nerdwallet",
     "netlify",
     "noom",
@@ -86,6 +87,7 @@
   ],
   "ashby": [
     "1password",
+    "bankjoy",
     "clay",
     "clickup",
     "close",
@@ -95,7 +97,9 @@
     "harvey",
     "hightouch",
     "linear",
+    "lumin-digital",
     "mercury",
+    "meridianlink",
     "modal",
     "notion",
     "openai",
@@ -108,5 +112,99 @@
     "vanta",
     "writer",
     "zapier"
+  ],
+  "workday": [
+    {
+      "name": "PNC",
+      "url": "https://pnc.wd5.myworkdayjobs.com/External"
+    },
+    {
+      "name": "Capital One",
+      "url": "https://capitalone.wd12.myworkdayjobs.com/Capital_One"
+    },
+    {
+      "name": "U.S. Bank",
+      "url": "https://usbank.wd1.myworkdayjobs.com/US_Bank_Careers"
+    },
+    {
+      "name": "Truist",
+      "url": "https://truist.wd1.myworkdayjobs.com/Careers"
+    },
+    {
+      "name": "Fifth Third",
+      "url": "https://fifththird.wd5.myworkdayjobs.com/53careers"
+    },
+    {
+      "name": "M&T Bank",
+      "url": "https://mtb.wd5.myworkdayjobs.com/MTB"
+    },
+    {
+      "name": "KeyBank",
+      "url": "https://keybank.wd5.myworkdayjobs.com/External_Career_Site"
+    },
+    {
+      "name": "Huntington",
+      "url": "https://huntington.wd12.myworkdayjobs.com/HNBcareers"
+    },
+    {
+      "name": "Synchrony",
+      "url": "https://synchronyfinancial.wd5.myworkdayjobs.com/careers"
+    },
+    {
+      "name": "Ally",
+      "url": "https://ally.wd1.myworkdayjobs.com/Ally"
+    },
+    {
+      "name": "TD Bank",
+      "url": "https://td.wd3.myworkdayjobs.com/TD_Bank_Careers"
+    },
+    {
+      "name": "Santander US",
+      "url": "https://santander.wd3.myworkdayjobs.com/SantanderCareers"
+    },
+    {
+      "name": "State Employees' Credit Union (SECU)",
+      "url": "https://ncsecu.wd1.myworkdayjobs.com/SECU"
+    },
+    {
+      "name": "BECU",
+      "url": "https://becu.wd1.myworkdayjobs.com/External"
+    },
+    {
+      "name": "SchoolsFirst FCU",
+      "url": "https://schoolsfirstfcu.wd115.myworkdayjobs.com/Careers"
+    },
+    {
+      "name": "Fiserv",
+      "url": "https://fiserv.wd5.myworkdayjobs.com/EXT"
+    },
+    {
+      "name": "FIS",
+      "url": "https://fis.wd5.myworkdayjobs.com/SearchJobs"
+    },
+    {
+      "name": "Q2",
+      "url": "https://q2ebanking.wd5.myworkdayjobs.com/Q2"
+    },
+    {
+      "name": "Alkami",
+      "url": "https://alkami.wd12.myworkdayjobs.com/Alkami"
+    },
+    {
+      "name": "Temenos",
+      "url": "https://temenos.wd103.myworkdayjobs.com/Temenoscareers"
+    },
+    {
+      "name": "NCR Atleos",
+      "url": "https://ncratleos.wd1.myworkdayjobs.com/ext_atleos_us"
+    },
+    {
+      "name": "Candescent",
+      "url": "https://candescent.wd501.myworkdayjobs.com/Hiring"
+    },
+    {
+      "name": "Velera (CO-OP Solutions)",
+      "url": "https://velera.wd5.myworkdayjobs.com/VeleraCareers"
+    }
   ]
 }

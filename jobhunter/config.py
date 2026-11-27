@@ -99,6 +99,9 @@ def load_companies():
     if os.path.exists(extra):
         with open(extra, encoding="utf-8") as f:
             for k, v in json.load(f).items():
-                if isinstance(v, list):
+                if isinstance(v, list) and k == "workday":
+                    known = {w.get("url") for w in comps.get(k, []) if isinstance(w, dict)}
+                    comps[k] = comps.get(k, []) + [w for w in v if isinstance(w, dict) and w.get("url") not in known]
+                elif isinstance(v, list):
                     comps[k] = sorted(set(comps.get(k, [])) | set(v))
     return comps
