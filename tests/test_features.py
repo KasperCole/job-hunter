@@ -164,6 +164,27 @@ class TrackingTests(unittest.TestCase):
         self.assertTrue({"applied_at", "interview_at", "followed_up_at", "closed_at"} <= cols)
 
 
+class QuietServerTests(unittest.TestCase):
+    def test_dropped_connections_are_quiet(self):
+        import contextlib
+        import io
+        from jobhunter import web
+
+        class Probe(web.QuietHTTPServer):
+            def __init__(self):
+                pass
+        out = io.StringIO()
+        with contextlib.redirect_stderr(out):
+            for exc in (ConnectionAbortedError(10053, "aborted"), BrokenPipeError(), ValueError("real bug")):
+                try:
+                    raise exc
+                except Exception:
+                    Probe().handle_error(None, ("127.0.0.1", 1))
+        self.assertNotIn("ConnectionAbortedError", out.getvalue())
+        self.assertNotIn("BrokenPipeError", out.getvalue())
+        self.assertIn("ValueError: real bug", out.getvalue())
+
+
 class PagesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -244,8 +265,8 @@ class PagesTests(unittest.TestCase):
             self.assertIn("Search for new jobs", self.get("/answers"))
             self.assertIn("Search started", self.post("/search", {}))
             self.assertIn("Searching for new jobs", self.get("/progress"))
-            self.assertIn('http-equiv="refresh"', self.get("/"))
-            self.assertNotIn('http-equiv="refresh"', self.get("/skills"))
+            self.assertIn("location.reload", self.get("/"))
+            self.assertNotIn("location.reload", self.get("/skills"))
             self.assertIn("already running", self.post("/search", {}))
             release.set()
             for _ in range(50):

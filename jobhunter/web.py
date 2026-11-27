@@ -70,8 +70,17 @@ def search_bar():
             f'<button class="p">Search for new jobs</button>{last}</form>')
 
 
+# Reload the job list every few seconds while a search runs, but never while you're typing or have
+# unsaved text in a box (for example a half-pasted job link).
+AUTO_REFRESH_JS = """<script>(function(){var done=false;function tick(){if(done)return;var a=document.activeElement;
+var typing=a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+var filled=[].some.call(document.querySelectorAll('textarea,input[type=text],input:not([type])'),function(e){return e.value});
+if(typing||filled){setTimeout(tick,4000);return;}done=true;location.reload();}
+window.addEventListener('load',function(){setTimeout(tick,4000);});})();</script>"""
+
+
 def shell(title, body, refresh=False, search=True):
-    meta = '<meta http-equiv="refresh" content="3">' if refresh else ""
+    meta = AUTO_REFRESH_JS if refresh else ""
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" '
             f'content="width=device-width,initial-scale=1">{meta}<title>{esc(title)}</title><style>{CSS}</style>'
             f'</head><body><div class="wrap"><header><h1><a href="/" style="text-decoration:none">Job Hunter</a></h1>'
@@ -535,6 +544,15 @@ def _start_search():
     return True
 
 
+class QuietHTTPServer(ThreadingHTTPServer):
+    """Don't print a traceback when the browser drops a connection early (a reload or a closed tab)."""
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)):
+            return
+        super().handle_error(request, client_address)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -729,7 +747,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(open_browser=True):
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    srv = QuietHTTPServer(("127.0.0.1", PORT), Handler)
     url = f"http://127.0.0.1:{PORT}/"
     print(f"Job Hunter is running at {url}  (press Ctrl+C to stop)")
     if open_browser:
