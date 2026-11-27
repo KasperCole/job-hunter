@@ -263,6 +263,28 @@ class PagesTests(unittest.TestCase):
         self.post("/answers/delete", {"key": "why_company"})
         self.assertEqual(answers.load(), {})
 
+    def test_rejected_list(self):
+        con = store.db()
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        con.execute("INSERT INTO jobs (id, title, company, status, score, first_seen, updated) VALUES "
+                    "('rj1', 'Help Desk Analyst', 'Initech', 'new', 70, ?, ?)", (now, now))
+        con.commit()
+        store.set_status(con, "rj1", "applied")
+        page = self.get("/progress")
+        self.assertIn("Waiting to hear back (", page)
+        self.assertIn("Initech", page.split('data-tour="waiting"')[1].split('data-tour="rejected"')[0])
+        self.post("/action", {"id": "rj1", "do": "rejected", "back": "/progress"})
+        page = self.get("/progress")
+        self.assertIn("Initech", page.split('data-tour="rejected"')[1])
+        self.assertIn("rejected today", page)
+        self.assertIsNotNone(con.execute("SELECT closed_at FROM jobs WHERE id='rj1'").fetchone()[0])
+        self.post("/action", {"id": "rj1", "do": "applied", "back": "/progress"})
+        row = con.execute("SELECT status, closed_at, applied_at FROM jobs WHERE id='rj1'").fetchone()
+        self.assertEqual((row[0], row[1]), ("applied", None))
+        self.assertIsNotNone(row[2])
+        con.execute("DELETE FROM jobs WHERE id='rj1'")
+        con.commit()
+
     def test_tips_and_tour_toggle(self):
         p = config.load_profile()
         p.update(show_tips=True, tour_seen=[])

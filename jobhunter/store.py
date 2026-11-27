@@ -35,8 +35,8 @@ def set_status(con, job_id, status, now=None):
     """Change a job's status and remember when it was applied to, interviewed or closed."""
     now = now or dt.datetime.now(dt.timezone.utc).isoformat()
     con.execute("UPDATE jobs SET status=?, updated=? WHERE id=?", (status, now, job_id))
-    if status == "applied":
-        con.execute("UPDATE jobs SET applied_at=COALESCE(applied_at, ?) WHERE id=?", (now, job_id))
+    if status == "applied":   # also used to undo a rejection
+        con.execute("UPDATE jobs SET applied_at=COALESCE(applied_at, ?), closed_at=NULL WHERE id=?", (now, job_id))
     elif status == "interview":
         con.execute("UPDATE jobs SET applied_at=COALESCE(applied_at, ?), interview_at=COALESCE(interview_at, ?) "
                     "WHERE id=?", (now, now, job_id))

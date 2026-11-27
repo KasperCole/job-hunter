@@ -48,6 +48,8 @@ TIPS = {
     "They replied: interview": "Moves the job to Interview.",
     "I followed up": "Notes that you sent a follow-up, so the reminder goes away.",
     "Got an offer": "Moves the job to Offer.",
+    "Mark rejected": "Moves the job to your Rejected list (Progress page and the Rejected tab).",
+    "Undo": "Moves the job back to Applied.",
     "Move back to New": "Puts the job back in New.",
     "Rewrite cover letter": "Throws away this cover letter and writes a fresh one.",
     "Save letter": "Saves your edits. Pre-fill uses this text.",
@@ -109,6 +111,10 @@ TOURS = {
         ('[data-tour="followups"]', "Follow-ups",
          "Applications from a week or more ago that you haven't followed up on. Send a short note to the "
          "recruiter, then click I followed up."),
+        ('[data-tour="waiting"]', "Waiting to hear back",
+         "Every application still waiting for a reply. When a company turns you down, click Mark rejected."),
+        ('[data-tour="rejected"]', "Rejected",
+         "Jobs that turned you down, kept here for your records. Undo moves one back to Applied."),
     ],
     "skills": [
         ('[data-tour="heat"]', "Skills to learn next",
