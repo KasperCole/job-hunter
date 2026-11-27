@@ -54,6 +54,8 @@ a{color:var(--acc)}table.heat th a{color:var(--ink)}.due{color:var(--warn);font-
 table.heat{border-collapse:collapse;font-size:13px;min-width:100%}table.heat th,table.heat td{border:1px solid var(--line);padding:6px 8px;text-align:center}
 table.heat th{font-weight:600;background:var(--card)}table.heat th.role{text-align:left;white-space:nowrap}table.heat th.sk{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;vertical-align:bottom;padding:8px 4px}
 table.heat td a{color:var(--ink);text-decoration:none;display:block}.bar{height:22px;background:var(--acc);border-radius:5px;min-width:2px}.bar.rej{background:#c2453b}
+h3.sec{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:14px 0 -4px}
+.filters{display:flex;gap:6px 28px;flex-wrap:wrap}.filters nav{margin:8px 0 4px}
 .frow{display:grid;grid-template-columns:150px 1fr 60px;gap:10px;align-items:center;margin:6px 0}
 """
 
@@ -305,16 +307,16 @@ def list_page(p, status, wp="", min_fit=0, sort="match", flash="", miss=""):
         dict(s=status, wp=wp, fit=min_fit or "", sort=sort if sort == "fit" else "", miss=miss), **kw).items() if v})
     nav = "".join(f'<a class="{"on" if s == status else ""}" href="{link(s=s)}">{s.title()} ({counts[s]})</a>'
                   for s in STATUSES)
-    filt = ('<nav data-tour="filters"><span class="lab">Where:</span>'
+    filt = ('<div class="filters" data-tour="filters"><section><h3 class="sec">Workplace Setup</h3><nav>'
             + "".join(f'<a class="{"on" if v == wp else ""}" href="{link(wp=v)}">{lab}</a>'
                       for v, lab in (("", "All"), ("remote", "Remote"), ("hybrid", "Hybrid"), ("onsite", "On-site")))
-            + '<span class="lab">Fit:</span>'
+            + '</nav></section><section><h3 class="sec">Job Fit</h3><nav>'
             + "".join(f'<a class="{"on" if v == min_fit else ""}" href="{link(fit=v)}">{lab}</a>'
                       for v, lab in ((0, "Any"), (35, "Fair+"), (55, "Good+"), (75, "Strong")))
-            + '<span class="lab">Sort:</span>'
+            + '<span class="lab">Sort by:</span>'
             + "".join(f'<a class="{"on" if k == sort else ""}" href="{link(sort=k)}">{lab}</a>'
                       for k, lab in (("match", "Match"), ("fit", "Fit")))
-            + "</nav>")
+            + "</nav></section></div>")
     if miss:
         filt += (f'<p class="mute">Showing jobs that ask for <b>{esc(sk.display(miss))}</b>, which isn\'t on your '
                  f'resume. <a href="{link(miss="")}">Show all</a></p>')
@@ -366,7 +368,8 @@ If a site can't be read, fill in the details below yourself.</p>
     body = (f"{flash_html(flash)}{search_box}<p class='mute'><b>Match</b> = how well the job fits what you're "
             "looking for (title, skills, pay, location). <b>Fit</b> = how many of the listing's skills are on your "
             f"resume. Pre-fill opens the application with your details filled in; you check it and click Submit.</p>"
-            f"<nav data-tour=\"tabs\">{nav}</nav>{filt}{''.join(cards)}{add}")
+            f"<section class=\"status\" data-tour=\"tabs\"><h3 class=\"sec\">Job Status</h3><nav>{nav}</nav></section>"
+            f"{filt}{''.join(cards)}{add}")
     return shell("Job Hunter", body, refresh=running)
 
 

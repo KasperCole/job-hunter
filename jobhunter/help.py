@@ -76,12 +76,12 @@ TOURS = {
         ('[data-tour="search"]', "Search for new jobs",
          "Click this once a day. It checks the job boards for new listings that fit your profile. "
          "It takes 1 to 3 minutes, and the list updates by itself."),
-        ('[data-tour="tabs"]', "Where each job is",
+        ('[data-tour="tabs"]', "Job Status",
          "Every job sits in one tab: New, Saved, Applied, Interview, Offer, Rejected, Ghosted or Skipped. "
          "The buttons on a job move it between tabs."),
-        ('[data-tour="filters"]', "Narrow the list",
-         "Show only remote, hybrid or on-site jobs, hide jobs that don't fit your skills well, "
-         "and sort by Match or Fit."),
+        ('[data-tour="filters"]', "Workplace Setup and Job Fit",
+         "Workplace Setup shows only remote, hybrid or on-site jobs. Job Fit hides jobs whose skill list your "
+         "resume doesn't cover well, and sorts by Match or Fit."),
         ('[data-tour="card"]', "A job",
          "Click the title to read the listing and its cover letter. Match is how well the job fits what you "
          "want; Fit is how much of its skill list your resume covers. \"Missing\" lists skills it asks for "
