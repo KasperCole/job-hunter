@@ -35,6 +35,7 @@
     "gusto",
     "headway",
     "hims",
+    "hippo70",
     "instacart",
     "justworks",
     "lattice",
@@ -96,6 +97,7 @@
     "drata",
     "harvey",
     "hightouch",
+    "lemonade",
     "linear",
     "lumin-digital",
     "mercury",
@@ -205,6 +207,78 @@
     {
       "name": "Velera (CO-OP Solutions)",
       "url": "https://velera.wd5.myworkdayjobs.com/VeleraCareers"
+    },
+    {
+      "name": "Nationwide",
+      "url": "https://nationwide.wd1.myworkdayjobs.com/Nationwide_Career"
+    },
+    {
+      "name": "Allstate",
+      "url": "https://allstate.wd5.myworkdayjobs.com/allstate_careers"
+    },
+    {
+      "name": "Travelers",
+      "url": "https://travelers.wd5.myworkdayjobs.com/External"
+    },
+    {
+      "name": "USAA",
+      "url": "https://usaa.wd1.myworkdayjobs.com/USAAJOBSWD"
+    },
+    {
+      "name": "GEICO",
+      "url": "https://geico.wd1.myworkdayjobs.com/External"
+    },
+    {
+      "name": "The Hartford",
+      "url": "https://thehartford.wd5.myworkdayjobs.com/Careers_External"
+    },
+    {
+      "name": "Prudential",
+      "url": "https://pru.wd5.myworkdayjobs.com/Careers"
+    },
+    {
+      "name": "Cigna",
+      "url": "https://cigna.wd5.myworkdayjobs.com/cignacareers"
+    },
+    {
+      "name": "Humana",
+      "url": "https://humana.wd5.myworkdayjobs.com/Humana_External_Career_Site"
+    },
+    {
+      "name": "Elevance Health",
+      "url": "https://elevancehealth.wd1.myworkdayjobs.com/ANT"
+    },
+    {
+      "name": "Guardian Life",
+      "url": "https://guardianlife.wd5.myworkdayjobs.com/Guardian-Life-Careers"
+    },
+    {
+      "name": "MassMutual",
+      "url": "https://massmutual.wd1.myworkdayjobs.com/MMCareers"
+    },
+    {
+      "name": "American Family",
+      "url": "https://amfam.wd1.myworkdayjobs.com/Careers"
+    },
+    {
+      "name": "Duke Energy",
+      "url": "https://dukeenergy.wd1.myworkdayjobs.com/search"
+    },
+    {
+      "name": "Ameren",
+      "url": "https://ameren.wd1.myworkdayjobs.com/External"
+    },
+    {
+      "name": "Xcel Energy",
+      "url": "https://xcelenergy.wd1.myworkdayjobs.com/External"
+    },
+    {
+      "name": "Central Hudson",
+      "url": "https://cenhud.wd5.myworkdayjobs.com/Cenhud"
+    },
+    {
+      "name": "Avangrid (NYSEG, RG&E) via Iberdrola",
+      "url": "https://iberdrola.wd3.myworkdayjobs.com/Iberdrola"
     }
   ]
 }
