@@ -463,9 +463,9 @@ def progress_page(p, flash=""):
     stages = [("Applied", fn["applied"]), ("Heard back", fn["replied"]), ("Interview", fn["interview"]),
               ("Offer", fn["offer"]), ("Rejected", fn["rejected"])]
     top = max(fn["applied"], 1)
-    bars = "".join(f'<div class="frow"><div>{lab}</div><div><div class="{'bar rej' if lab == 'Rejected' else 'bar'}" style="width:{round(100 * n / top)}%">'
+    bars = "".join(f'<div class="frow"><div>{lab}</div><div><div class="{cls}" style="width:{round(100 * n / top)}%">'
                    f'</div></div><div><b>{n}</b>{f" <span class=mute>({round(100 * n / top)}%)</span>" if fn["applied"] and lab != "Applied" else ""}</div></div>'
-                   for lab, n in stages)
+                   for lab, n, cls in ((lab, n, "bar rej" if lab == "Rejected" else "bar") for lab, n in stages))
     due = insights.follow_ups_due(con)
     due_html = "".join(
         f'<div class="card row"><div><div class="t"><a href="/job?id={urllib.parse.quote(r["id"])}">{esc(r["title"])}</a></div>'
