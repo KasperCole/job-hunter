@@ -53,7 +53,7 @@ pre{white-space:pre-wrap;font:14px/1.5 system-ui,sans-serif;max-height:420px;ove
 a{color:var(--acc)}table.heat th a{color:var(--ink)}.due{color:var(--warn);font-weight:600}.scroll{overflow-x:auto}
 table.heat{border-collapse:collapse;font-size:13px;min-width:100%}table.heat th,table.heat td{border:1px solid var(--line);padding:6px 8px;text-align:center}
 table.heat th{font-weight:600;background:var(--card)}table.heat th.role{text-align:left;white-space:nowrap}table.heat th.sk{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;vertical-align:bottom;padding:8px 4px}
-table.heat td a{color:var(--ink);text-decoration:none;display:block}.bar{height:22px;background:var(--acc);border-radius:5px;min-width:2px}
+table.heat td a{color:var(--ink);text-decoration:none;display:block}.bar{height:22px;background:var(--acc);border-radius:5px;min-width:2px}.bar.rej{background:#c2453b}
 h3.sec{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:14px 0 -4px}
 .filters{display:flex;gap:6px 28px;flex-wrap:wrap}.filters nav{margin:8px 0 4px}
 .frow{display:grid;grid-template-columns:150px 1fr 60px;gap:10px;align-items:center;margin:6px 0}
@@ -464,9 +464,9 @@ def progress_page(p, flash=""):
     insights.mark_ghosted(con)
     fn = insights.funnel(con)
     stages = [("Applied", fn["applied"]), ("Heard back", fn["replied"]), ("Interview", fn["interview"]),
-              ("Offer", fn["offer"])]
+              ("Offer", fn["offer"]), ("Rejected", fn["rejected"])]
     top = max(fn["applied"], 1)
-    bars = "".join(f'<div class="frow"><div>{lab}</div><div><div class="bar" style="width:{round(100 * n / top)}%">'
+    bars = "".join(f'<div class="frow"><div>{lab}</div><div><div class="{'bar rej' if lab == 'Rejected' else 'bar'}" style="width:{round(100 * n / top)}%">'
                    f'</div></div><div><b>{n}</b>{f" <span class=mute>({round(100 * n / top)}%)</span>" if fn["applied"] and lab != "Applied" else ""}</div></div>'
                    for lab, n in stages)
     due = insights.follow_ups_due(con)

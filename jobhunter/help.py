@@ -107,7 +107,7 @@ TOURS = {
     ],
     "progress": [
         ('[data-tour="funnel"]', "How it's going",
-         "How many applications got a reply, an interview and an offer."),
+         "How many applications got a reply, an interview, an offer or a rejection."),
         ('[data-tour="followups"]', "Follow-ups",
          "Applications from a week or more ago that you haven't followed up on. Send a short note to the "
          "recruiter, then click I followed up."),
