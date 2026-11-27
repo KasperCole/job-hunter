@@ -164,6 +164,27 @@ class TrackingTests(unittest.TestCase):
         self.assertTrue({"applied_at", "interview_at", "followed_up_at", "closed_at"} <= cols)
 
 
+class QuietServerTests(unittest.TestCase):
+    def test_dropped_connections_are_quiet(self):
+        import contextlib
+        import io
+        from jobhunter import web
+
+        class Probe(web.QuietHTTPServer):
+            def __init__(self):
+                pass
+        out = io.StringIO()
+        with contextlib.redirect_stderr(out):
+            for exc in (ConnectionAbortedError(10053, "aborted"), BrokenPipeError(), ValueError("real bug")):
+                try:
+                    raise exc
+                except Exception:
+                    Probe().handle_error(None, ("127.0.0.1", 1))
+        self.assertNotIn("ConnectionAbortedError", out.getvalue())
+        self.assertNotIn("BrokenPipeError", out.getvalue())
+        self.assertIn("ValueError: real bug", out.getvalue())
+
+
 class PagesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -226,6 +247,39 @@ class PagesTests(unittest.TestCase):
         self.assertEqual(answers.find(answers.load(), "Why Globex?", "Globex"), "I like Globex.")
         self.post("/answers/delete", {"key": "why_company"})
         self.assertEqual(answers.load(), {})
+
+    def test_search_button(self):
+        import time
+        release = threading.Event()
+        calls = []
+
+        def fake_search(profile, log=print, letters=20):
+            calls.append(1)
+            log("Fetched 12 listings in total.")
+            release.wait(10)
+            log("3 new matches saved.")
+            return 3
+        orig = self.web.run_search
+        self.web.run_search = fake_search
+        try:
+            self.assertIn("Search for new jobs", self.get("/answers"))
+            self.assertIn("Search started", self.post("/search", {}))
+            self.assertIn("Searching for new jobs", self.get("/progress"))
+            self.assertIn("location.reload", self.get("/"))
+            self.assertNotIn("location.reload", self.get("/skills"))
+            self.assertIn("already running", self.post("/search", {}))
+            release.set()
+            for _ in range(50):
+                if not self.web.SEARCH["running"]:
+                    break
+                time.sleep(0.1)
+            page = self.get("/skills")
+            self.assertIn("Last search:", page)
+            self.assertIn("3 new matches saved", page)
+            self.assertEqual(len(calls), 1)
+        finally:
+            release.set()
+            self.web.run_search = orig
 
 
 if __name__ == "__main__":
