@@ -227,6 +227,39 @@ class PagesTests(unittest.TestCase):
         self.post("/answers/delete", {"key": "why_company"})
         self.assertEqual(answers.load(), {})
 
+    def test_search_button(self):
+        import time
+        release = threading.Event()
+        calls = []
+
+        def fake_search(profile, log=print, letters=20):
+            calls.append(1)
+            log("Fetched 12 listings in total.")
+            release.wait(10)
+            log("3 new matches saved.")
+            return 3
+        orig = self.web.run_search
+        self.web.run_search = fake_search
+        try:
+            self.assertIn("Search for new jobs", self.get("/answers"))
+            self.assertIn("Search started", self.post("/search", {}))
+            self.assertIn("Searching for new jobs", self.get("/progress"))
+            self.assertIn('http-equiv="refresh"', self.get("/"))
+            self.assertNotIn('http-equiv="refresh"', self.get("/skills"))
+            self.assertIn("already running", self.post("/search", {}))
+            release.set()
+            for _ in range(50):
+                if not self.web.SEARCH["running"]:
+                    break
+                time.sleep(0.1)
+            page = self.get("/skills")
+            self.assertIn("Last search:", page)
+            self.assertIn("3 new matches saved", page)
+            self.assertEqual(len(calls), 1)
+        finally:
+            release.set()
+            self.web.run_search = orig
+
 
 if __name__ == "__main__":
     unittest.main()

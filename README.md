@@ -62,11 +62,11 @@ Your browser opens the app at `http://127.0.0.1:8765`.
 
 1. **Upload your resume.** You can add more than one version later (for example a technical one and a general one). For each job, the app uses the version that covers the most of the skills it asks for.
 2. **Check your profile.** Fix your job titles, skills and contact details if needed. Tick **Remote**, **Hybrid** and/or **On-site**, enter your area, and set a minimum salary if you want one. Save.
-3. **Click "Find jobs now".** The first search takes a minute or two.
+3. **Click "Search for new jobs".** The button is at the top of every page. The first search takes a minute or two, and you can keep using the app while it runs.
 4. **Review your matches.** Filter by Remote / Hybrid / On-site and by Fit. Open a job to read and edit its cover letter.
 5. **Click "Pre-fill application".** A browser window opens with the form filled in. Answer anything left blank, check everything, and click Submit. Then click **Mark applied**.
 
-Run a search once a day to pick up new listings.
+Click **Search for new jobs** once a day to pick up new listings.
 
 ## Claude-written cover letters (optional)
 

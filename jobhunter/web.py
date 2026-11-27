@@ -24,7 +24,8 @@ from .store import STATUSES, add_manual, db, rescore, salary_str, set_status
 
 PORT = int(os.environ.get("JOBHUNTER_PORT", "8765"))
 MAX_UPLOAD = 10 * 1024 * 1024
-SEARCH = {"running": False, "log": [], "finished": None}
+SEARCH = {"running": False, "log": [], "finished": None, "started": None}
+_SEARCH_LOCK = threading.Lock()
 esc = html.escape
 
 CSS = """
@@ -56,14 +57,27 @@ table.heat td a{color:var(--ink);text-decoration:none;display:block}.bar{height:
 """
 
 
-def shell(title, body, refresh=False):
+def search_bar():
+    """The "Search for new jobs" button shown on every page, or a progress note while a search runs."""
+    if SEARCH["running"]:
+        mins = int((dt.datetime.now() - SEARCH["started"]).total_seconds() // 60) if SEARCH["started"] else 0
+        latest = (SEARCH["log"] or ["Starting…"])[-1]
+        return (f'<div class="flash">Searching for new jobs{f" ({mins} min so far)" if mins else ""}. This usually '
+                f'takes 1 to 3 minutes, and you can keep using the app meanwhile. <a href="/">Jobs</a> refreshes on '
+                f'its own.<div class="log">{esc(latest)}</div></div>')
+    last = f'<span class="mute">Last search: {esc(SEARCH["finished"])}</span>' if SEARCH["finished"] else ""
+    return ('<form method="post" action="/search" class="btns" style="align-items:center;margin:8px 0">'
+            f'<button class="p">Search for new jobs</button>{last}</form>')
+
+
+def shell(title, body, refresh=False, search=True):
     meta = '<meta http-equiv="refresh" content="3">' if refresh else ""
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" '
             f'content="width=device-width,initial-scale=1">{meta}<title>{esc(title)}</title><style>{CSS}</style>'
             f'</head><body><div class="wrap"><header><h1><a href="/" style="text-decoration:none">Job Hunter</a></h1>'
             f'<nav style="margin:0"><a href="/">Jobs</a><a href="/progress">Progress</a><a href="/skills">Skills</a>'
             f'<a href="/answers">Answers</a><a href="/settings">My profile</a></nav></header>'
-            f'{body}</div></body></html>')
+            f'{search_bar() if search else ""}{body}</div></body></html>')
 
 
 def post_btn(action, fields, label, primary=False):
@@ -92,7 +106,7 @@ def setup_page(flash=""):
             "boards and company career sites for them, writes a cover letter for each, and fills in the "
             "application for you to check and submit.</p>"
             + UPLOAD_FORM.format(heading="Step 1: upload your resume", extra=""))
-    return shell("Set up Job Hunter", body)
+    return shell("Set up Job Hunter", body, search=False)
 
 
 def _lines(v):
@@ -310,16 +324,14 @@ def list_page(p, status, wp="", min_fit=0, sort="match", flash="", miss=""):
 <span class="score" title="Match: how well the job fits what you're looking for. Fit: share of the listing's skills that are on your resume.">Match {r['score']} · Fit {r['fit']}</span></div>
 <div class="btns">{''.join(acts)}</div></div>""")
     if not cards:
-        cards.append('<p class="mute">Nothing here yet. Click <b>Find jobs now</b>.</p>' if status == "new"
+        cards.append('<p class="mute">Nothing here yet. Click <b>Search for new jobs</b>.</p>' if status == "new"
                      else '<p class="mute">Nothing here yet.</p>')
     running = SEARCH["running"]
-    search_box = (f'<div class="card"><b>Searching…</b> this page refreshes on its own.<div class="log">'
+    search_box = (f'<div class="card"><b>Search progress</b><div class="log">'
                   f'{esc(chr(10).join(SEARCH["log"][-12:]))}</div></div>') if running else (
-        '<div class="card row"><div><b>Find new jobs</b><div class="mute">Searches for: '
+        '<p class="mute">Searches for: '
         + esc(", ".join((p["search"].get("keywords") or p.get("target_titles") or [])[:6]) or "nothing yet: add job titles in My profile")
-        + "</div>"
-        + (f'<div class="log">Last search: {esc(SEARCH["finished"])}</div>' if SEARCH["finished"] else "")
-        + '</div><form method="post" action="/search"><button class="p">Find jobs now</button></form></div>')
+        + ". Change this in My profile.</p>")
     add = """<details class="card"><summary><b>Add a job you found yourself</b></summary>
 <p class="mute">Paste the link and click Add job. Job Hunter reads the title, company, location, pay and
 description from the posting. Greenhouse, Lever and Ashby links always work; most other career sites do too.
@@ -504,10 +516,12 @@ def parse_multipart(content_type, body):
 
 
 def _start_search():
-    if SEARCH["running"]:
-        return
+    """Start a search in the background. Returns False if one is already running."""
+    with _SEARCH_LOCK:
+        if SEARCH["running"]:
+            return False
+        SEARCH.update(running=True, log=[], started=dt.datetime.now())
     p = config.load_profile()
-    SEARCH.update(running=True, log=[])
 
     def work():
         try:
@@ -518,6 +532,7 @@ def _start_search():
             SEARCH["running"] = False
             SEARCH["finished"] = dt.datetime.now().strftime("%b %d, %I:%M %p") + " · " + (SEARCH["log"] or [""])[-1]
     threading.Thread(target=work, daemon=True).start()
+    return True
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -602,8 +617,9 @@ class Handler(BaseHTTPRequestHandler):
             config.save_profile(p)
             return self._redirect("/settings", "Resume removed from your profile (the file is still in my-data/resumes).")
         if self.path == "/search":
-            _start_search()
-            return self._redirect("/")
+            started = _start_search()
+            return self._redirect("/", "Search started. New matches appear under New when it finishes."
+                                  if started else "A search is already running.")
         if self.path == "/add":
             return self._add_job(p, g)
         if self.path == "/answers/save":

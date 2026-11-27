@@ -166,7 +166,9 @@ class AppFlowTests(unittest.TestCase):
             return r.read().decode()
 
     def test_flow(self):
-        self.assertIn("upload your resume", self.get("/"))
+        setup = self.get("/")
+        self.assertIn("upload your resume", setup)
+        self.assertNotIn("Search for new jobs", setup)
         boundary = "XyZ" + uuid.uuid4().hex
         with open(SAMPLE_DOCX, "rb") as fh:
             data = fh.read()
