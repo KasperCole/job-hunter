@@ -244,6 +244,9 @@ class PagesTests(unittest.TestCase):
         row = store.db().execute("SELECT * FROM jobs").fetchone()
         self.assertEqual((row["url"], row["salary_min"]), ("https://acme.example/jobs/1", 60000))
 
+        listing = self.get("/")
+        for header in ("Job Status", "Workplace Setup", "Job Fit"):
+            self.assertIn(f'<h3 class="sec">{header}</h3>', listing)
         skills = self.get("/skills")
         self.assertIn("IT Support Specialist (1)", skills)
         self.assertIn("100%", skills)
