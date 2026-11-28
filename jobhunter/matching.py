@@ -89,6 +89,11 @@ def score_job(j, profile, rlow):
     # skills
     hits = [k for k in profile.get("skills") or [] if sk.has_term(k, text)]
     skill_pts = min(30, 3 * len(hits))
+    if j.get("source") == "workday" and not (j.get("description") or "").strip():
+        # The site wouldn't show the full posting, so skills can't be counted. Give the points a posting
+        # usually earns instead of zero, so a strong title match still shows up.
+        skill_pts = 9
+        reasons.append("full posting not loaded; open the listing to check skills")
     if hits:
         reasons.append("skills: " + ", ".join(sk.display(h) for h in hits[:8]))
     score = tpts + skill_pts + loc_pts

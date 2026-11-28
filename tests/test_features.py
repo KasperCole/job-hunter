@@ -142,6 +142,52 @@ class WorkdayTests(unittest.TestCase):
         self.assertEqual(got, {"jobPostings": []})
         self.assertEqual((len(calls), waits), (3, [2, 2]))
 
+    def test_reset_connections_are_retried(self):
+        calls, waits = [], []
+
+        def opener(req, timeout=0):
+            calls.append(req.get_method())
+            raise urllib.error.URLError(ConnectionResetError(10054, "forcibly closed"))
+
+        orig = urllib.request.urlopen
+        urllib.request.urlopen = opener
+        try:
+            with self.assertRaises(urllib.error.URLError):
+                sources.workday_request("https://x.wd1.myworkdayjobs.com/wday/cxs/x/y/job/1", tries=3, sleep=waits.append)
+        finally:
+            urllib.request.urlopen = orig
+        self.assertEqual((calls, waits), (["GET"] * 3, [4, 8]))
+
+    def test_skips_postings_that_cannot_pass(self):
+        opened = []
+
+        def post(url, payload):
+            return {"jobPostings": [
+                {"title": "Help Desk Technician", "externalPath": "/job/Tampa/HD_1", "locationsText": "Tampa, FL"},
+                {"title": "Help Desk Technician", "externalPath": "/job/x/HD_2", "locationsText": "3 Locations"},
+                {"title": "Help Desk Analyst", "externalPath": "/job/US---Remote/HD_3", "locationsText": "US - Remote"}]}
+
+        def fetch(url):
+            opened.append(url.rsplit("/", 1)[-1])
+            return {"jobPostingInfo": {"remoteType": "Fully Remote", "location": "US - Remote"}}
+
+        jobs = sources.src_workday(self.ENTRY, ["help desk"], ["Help Desk Technician"], fetch=fetch, post=post,
+                                   sleep=lambda s: None, place_ok=sources.remote_or_several)
+        self.assertEqual(opened, ["HD_2", "HD_3"])
+        self.assertEqual([j["workplace"] for j in jobs], ["remote", "remote"])
+
+    def test_score_without_posting_text(self):
+        from jobhunter import matching
+        import copy
+        profile = copy.deepcopy(config.DEFAULT_PROFILE)
+        profile["target_titles"] = ["Help Desk Technician"]
+        profile["search"]["workplace"] = ["remote"]
+        j = sources.job("workday", "a-1", "Help Desk Technician", "Example Bank", "Remote - US", "u", "u", "",
+                        workplace_hint="remote")
+        score, reasons = matching.score_job(j, profile, "")
+        self.assertIn("full posting not loaded; open the listing to check skills", reasons)
+        self.assertGreaterEqual(score, 40)
+
     def test_shipped_boards_and_my_data_merge(self):
         comps = config.load_companies()
         self.assertTrue(any(w["name"] == "PNC" for w in comps["workday"]))
