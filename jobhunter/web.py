@@ -100,10 +100,19 @@ def shell(title, body, refresh=False, search=True, page=None):
     return guide.add_tips(out)
 
 
-def post_btn(action, fields, label, primary=False):
+def post_btn(action, fields, label, primary=False, confirm=""):
     hidden = "".join(f'<input type="hidden" name="{esc(k)}" value="{esc(str(v))}">' for k, v in fields.items())
-    return (f'<form class="inline" method="post" action="{action}">{hidden}'
+    ask = f' onsubmit="return confirm({esc(json.dumps(confirm))})"' if confirm else ""
+    return (f'<form class="inline" method="post" action="{action}"{ask}>{hidden}'
             f'<button class="{"p" if primary else ""}">{esc(label)}</button></form>')
+
+
+REMOVE_ASK = "Remove this job you added? It will be deleted from Job Hunter."
+
+
+def remove_btn(r, f):
+    """Delete button for a job you added yourself (paste-a-link or the form). Found jobs use Skip instead."""
+    return post_btn("/action", dict(f, do="remove"), "Remove", confirm=REMOVE_ASK) if r["source"] == "manual" else ""
 
 
 def flash_html(msg):
@@ -334,6 +343,7 @@ def list_page(p, status, wp="", min_fit=0, sort="match", flash="", miss=""):
             acts.append(post_btn("/action", dict(f, do="skipped"), "Skip"))
         else:
             acts += status_buttons(r, f)
+        acts.append(remove_btn(r, f))
         sal = salary_str(r)
         missing = json.loads(r["missing"] or "[]")
         wp_label = {"remote": "Remote", "hybrid": "Hybrid", "onsite": "On-site"}.get(r["workplace"], "")
@@ -390,7 +400,7 @@ def job_page(p, job_id, flash=""):
 <div class="btns" data-tour="job-actions">{post_btn('/action', dict(f, do='fill'), 'Pre-fill application', True)}
 <a class="b" href="{esc(r['apply_url'])}" target="_blank" rel="noopener">Open listing</a>
 {post_btn('/action', dict(f, do='applied'), 'Mark applied')}{post_btn('/action', dict(f, do='regen'), 'Rewrite cover letter')}
-{post_btn('/action', dict(f, do='skipped', back='/'), 'Skip')}</div>
+{post_btn('/action', dict(f, do='skipped', back='/'), 'Skip')}{remove_btn(r, dict(f, back='/'))}</div>
 <div class="card" data-tour="scores"><b>Match {r['score']}/100</b> <span class="mute">{esc(r['reasons'] or '')}</span><br>
 <b>Fit {r['fit']}/100 ({esc(r['fit_label'] or '')})</b> <span class="mute">share of this listing's skills that are on your resume</span><br>
 <b>You have:</b> {esc(", ".join(matched) or "none of the skills it lists")}<br>
@@ -741,6 +751,12 @@ class Handler(BaseHTTPRequestHandler):
                              stdout=log, stderr=subprocess.STDOUT, creationflags=flags)
             log.close()
             msg = "Opening the application in a new browser window. Check it, click Submit, then Mark applied here."
+        elif action == "remove":
+            gone = con.execute("DELETE FROM jobs WHERE id=? AND source='manual'", (jid,)).rowcount
+            con.commit()
+            msg = "Removed the job you added." if gone else "Only jobs you added yourself can be removed. Use Skip for the others."
+            if back.startswith("/job?"):
+                back = "/"
         elif action == "regen":
             con.execute("UPDATE jobs SET cover_letter=NULL WHERE id=?", (jid,))
             con.commit()
