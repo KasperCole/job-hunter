@@ -12,6 +12,7 @@ import datetime as dt
 import html
 import json
 import re
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -295,23 +296,41 @@ def src_ashby(board):
 # address of the company's careers page. The site's own search is used with your target titles, and only
 # jobs whose title is close to one of them are kept, since a bank's board can hold thousands of jobs.
 
-def http_post_json(url, payload, timeout=25, tries=4, sleep=time.sleep):
-    """POST JSON and read JSON back. Workday answers bursts with HTTP 429, so wait and try again."""
+# Workday answers too many requests at once with HTTP 429, dropped connections and even failed name lookups,
+# so only a few Workday sites are searched at the same time and each waits a moment between requests.
+WORKDAY_AT_ONCE = threading.BoundedSemaphore(3)
+WORKDAY_GAP = 0.8               # seconds between requests to the same Workday site
+
+
+def _retryable(e):
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code in (429, 502, 503, 504)
+    return isinstance(e, (urllib.error.URLError, ConnectionError, TimeoutError))
+
+
+def workday_request(url, payload=None, timeout=25, tries=4, sleep=time.sleep):
+    """GET (or POST payload) JSON from a Workday site, waiting and trying again when it says it's busy."""
     for attempt in range(tries):
-        req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST",
+        data = json.dumps(payload).encode() if payload is not None else None
+        req = urllib.request.Request(url, data=data, method="POST" if data else "GET",
                                      headers={"User-Agent": UA, "Accept": "application/json",
                                               "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read().decode("utf-8", "replace"))
-        except urllib.error.HTTPError as e:
-            if e.code != 429 or attempt == tries - 1:
+        except Exception as e:
+            if not _retryable(e) or attempt == tries - 1:
                 raise
             try:
-                wait = int(e.headers.get("Retry-After") or 0)
+                wait = int(getattr(e, "headers", None) and e.headers.get("Retry-After") or 0)
             except ValueError:
                 wait = 0
-            sleep(min(wait or 5 * (attempt + 1), 30))
+            sleep(min(wait or 4 * (attempt + 1), 30))
+
+
+def http_post_json(url, payload, timeout=25, tries=4, sleep=time.sleep):
+    """POST JSON and read JSON back, with Workday's wait-and-retry."""
+    return workday_request(url, payload, timeout, tries, sleep)
 
 
 def workday_base(url):
@@ -334,32 +353,37 @@ def _workday_mode(remote_type, text):
     return "onsite" if rt or low.strip() else None
 
 
-def src_workday(entry, terms, targets, fetch=None, post=None, sleep=time.sleep):
-    fetch, post = fetch or http_json, post or http_post_json
+def remote_or_several(place):
+    """A Workday location that may be remote: 'Remote - US', 'Home Location-PA', or '3 Locations'."""
+    low = (place or "").lower()
+    return bool(re.search(r"remote|virtual|home location|\d+ locations", low))
+
+
+def src_workday(entry, terms, targets, fetch=None, post=None, sleep=time.sleep, place_ok=None):
+    """place_ok(location_text): False skips opening a posting that would be dropped anyway (for example
+    on-site in another city when you only want remote jobs), which saves Workday requests."""
+    fetch = fetch or (lambda url: workday_request(url, tries=2, sleep=sleep))
+    post = post or (lambda url, payload: http_post_json(url, payload, sleep=sleep))
     base, site, tenant = workday_base(entry["url"])
     seen, out = set(), []
-    details_blocked = False        # once a board refuses detail pages, stop asking (saves minutes of waiting)
+    details_blocked = False        # detail pages are rate-limited harder than search: stop after a refusal
     for term in terms:
+        sleep(WORKDAY_GAP)
         data = post(base + "/jobs", {"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": term})
         for p in data.get("jobPostings") or []:
             path = p.get("externalPath")
             if not path or path in seen or title_score(p.get("title") or "", targets)[0] < 20:
                 continue
             seen.add(path)
+            if place_ok and not place_ok(p.get("locationsText") or ""):
+                continue
             info = {}
-            for attempt in range(0 if details_blocked else 2):
+            if not details_blocked:
+                sleep(WORKDAY_GAP)
                 try:
                     info = fetch(base + path).get("jobPostingInfo") or {}
-                    break
-                except urllib.error.HTTPError as e:
-                    if e.code != 429:
-                        break
-                    if attempt == 1:
-                        details_blocked = True
-                    else:
-                        sleep(5)
                 except Exception:
-                    break
+                    details_blocked = True
             # When the detail page is refused, the job is still kept from the search result.
             title = info.get("title") or p.get("title")
             loc = ", ".join(x for x in [info.get("location") or p.get("locationsText") or ""]
@@ -401,7 +425,12 @@ def fetch_all(profile, log=print):
     tasks += [(f"Ashby/{b}", src_ashby, b) for b in comps.get("ashby", [])]
     targets = profile.get("target_titles") or q["keywords"]
     terms = profile.get("workday_search") or q["keywords"] or targets
-    tasks += [(f"Workday/{w.get('name')}", lambda w: src_workday(w, terms, targets), w)
+    place_ok = remote_or_several if q["workplace"] == ["remote"] else None
+
+    def workday(w):
+        with WORKDAY_AT_ONCE:
+            return src_workday(w, terms, targets, place_ok=place_ok)
+    tasks += [(f"Workday/{w.get('name')}", workday, w)
               for w in comps.get("workday", []) if isinstance(w, dict) and w.get("url") and terms]
     results, failed, boards = [], [], 0
     with cf.ThreadPoolExecutor(max_workers=12) as ex:
