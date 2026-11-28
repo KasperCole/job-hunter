@@ -413,6 +413,14 @@ class PagesTests(unittest.TestCase):
         self.assertIn("return confirm(", umbrella)
         self.assertNotIn(">Remove</button>", hooli)
         self.assertIn(">Remove</button>", self.get("/job?id=manual:rm1"))
+        # A request from a sandboxed page or file (Origin: null) is refused, like every other action.
+        req = urllib.request.Request(self.base + "/action", method="POST",
+                                     data=urllib.parse.urlencode({"id": "manual:rm1", "do": "remove"}).encode(),
+                                     headers={"Content-Type": "application/x-www-form-urlencoded", "Origin": "null"})
+        with self.assertRaises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(req)
+        self.assertEqual(err.exception.code, 403)
+        self.assertIsNotNone(con.execute("SELECT 1 FROM jobs WHERE id='manual:rm1'").fetchone())
         self.post("/action", {"id": "manual:rm1", "do": "remove", "back": "/job?id=manual:rm1"})
         self.assertIsNone(con.execute("SELECT 1 FROM jobs WHERE id='manual:rm1'").fetchone())
         self.post("/action", {"id": "greenhouse:rm2", "do": "remove", "back": "/"})
