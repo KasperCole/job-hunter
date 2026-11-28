@@ -59,6 +59,13 @@ class LocationTests(unittest.TestCase):
         self.assertTrue(locations.is_local("New York, New York, United States", "New York", "NY"))
         self.assertFalse(locations.is_local("Albany, New York", "New York", "NY"))
         self.assertFalse(locations.is_local("San Francisco, CA", "New York", "NY"))
+        # A metro place name in another state isn't local.
+        self.assertFalse(locations.is_local("Brooklyn, OH", "New York", "NY"))
+        self.assertFalse(locations.is_local("Queens, TX", "Brooklyn", "NY"))
+        self.assertTrue(locations.is_local("Columbus, OH; Brooklyn, NY", "New York", "NY"))
+        self.assertTrue(locations.is_local("Stamford, CT", "New York", "NY"))
+        self.assertFalse(locations.is_local("Arlington, TX", "Washington", "DC"))
+        self.assertTrue(locations.is_local("Arlington, VA", "Washington", "DC"))
         self.assertTrue(locations.is_local("Springfield, IL", "Decatur", "IL"))   # small town: same state
 
     def test_remote_country(self):
