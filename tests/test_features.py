@@ -396,6 +396,38 @@ class PagesTests(unittest.TestCase):
         con.execute("DELETE FROM jobs WHERE id='rj1'")
         con.commit()
 
+    def test_remove_added_job(self):
+        con = store.db()
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        con.execute("INSERT INTO jobs (id, source, title, company, url, apply_url, description, status, score, "
+                    "first_seen, updated) VALUES "
+                    "('manual:rm1', 'manual', 'Help Desk Lead', 'Umbrella', 'https://u.example/1', 'https://u.example/1', "
+                    "'', 'new', 100, ?, ?), "
+                    "('greenhouse:rm2', 'greenhouse', 'Help Desk Analyst', 'Hooli', 'https://h.example/2', "
+                    "'https://h.example/2', '', 'new', 70, ?, ?)", (now, now, now, now))
+        con.commit()
+        page = self.get("/")
+        umbrella = page.split("Umbrella")[1].split('data-tour="card"')[0]
+        hooli = page.split("Hooli")[1].split('data-tour="card"')[0]
+        self.assertIn(">Remove</button>", umbrella)
+        self.assertIn("return confirm(", umbrella)
+        self.assertNotIn(">Remove</button>", hooli)
+        self.assertIn(">Remove</button>", self.get("/job?id=manual:rm1"))
+        # A request from a sandboxed page or file (Origin: null) is refused, like every other action.
+        req = urllib.request.Request(self.base + "/action", method="POST",
+                                     data=urllib.parse.urlencode({"id": "manual:rm1", "do": "remove"}).encode(),
+                                     headers={"Content-Type": "application/x-www-form-urlencoded", "Origin": "null"})
+        with self.assertRaises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(req)
+        self.assertEqual(err.exception.code, 403)
+        self.assertIsNotNone(con.execute("SELECT 1 FROM jobs WHERE id='manual:rm1'").fetchone())
+        self.post("/action", {"id": "manual:rm1", "do": "remove", "back": "/job?id=manual:rm1"})
+        self.assertIsNone(con.execute("SELECT 1 FROM jobs WHERE id='manual:rm1'").fetchone())
+        self.post("/action", {"id": "greenhouse:rm2", "do": "remove", "back": "/"})
+        self.assertIsNotNone(con.execute("SELECT 1 FROM jobs WHERE id='greenhouse:rm2'").fetchone())
+        con.execute("DELETE FROM jobs WHERE id='greenhouse:rm2'")
+        con.commit()
+
     def test_tips_and_tour_toggle(self):
         p = config.load_profile()
         p.update(show_tips=True, tour_seen=[])

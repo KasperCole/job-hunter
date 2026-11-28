@@ -30,7 +30,7 @@ Job Hunter only uses official public APIs and companies' own public job boards. 
 | [Adzuna](https://developer.adzuna.com/) | Jobs at local employers in any US city, within a distance you choose. The best source for on-site and hybrid work. | Free |
 | [USAJOBS](https://developer.usajobs.gov/) | US federal government jobs | Free |
 
-To add a single job you found yourself, paste its link into **Add a job you found yourself** on the Jobs page. Job Hunter reads the title, company, location, pay and description from the posting (Greenhouse, Lever, Ashby and Workday links always work, and most other career sites do too).
+To add a single job you found yourself, paste its link into **Add a job you found yourself** on the Jobs page. Job Hunter reads the title, company, location, pay and description from the posting (Greenhouse, Lever, Ashby and Workday links always work, and most other career sites do too). If a job you added turns out to be a poor fit, click **Remove** on it to delete it.
 
 To add a company, find the board name in its careers link (`boards.greenhouse.io/<name>`, `jobs.lever.co/<name>` or `jobs.ashbyhq.com/<name>`) and add it to `data/companies.json`, or to `my-data/companies.json` to keep your list private.
 

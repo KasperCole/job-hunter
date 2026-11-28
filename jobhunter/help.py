@@ -44,6 +44,7 @@ TIPS = {
     "Mark applied": "Moves the job to Applied once you've submitted the application.",
     "Save for later": "Moves the job to Saved so you can come back to it.",
     "Skip": "Hides the job. You can find it again under Skipped.",
+    "Remove": "Deletes a job you added yourself. Asks first, and can't be undone.",
     "Got an interview": "Moves the job to Interview.",
     "They replied: interview": "Moves the job to Interview.",
     "I followed up": "Notes that you sent a follow-up, so the reminder goes away.",
