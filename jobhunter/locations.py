@@ -108,6 +108,15 @@ def metro_for(city):
     return None
 
 
+# States each metro area reaches into. A place name only counts as local when the location doesn't name
+# some other state: "Brooklyn, OH" isn't New York City and "Arlington, TX" isn't Washington.
+METRO_STATES = {
+    "new york": {"NY", "NJ", "CT"}, "washington": {"DC", "VA", "MD"}, "philadelphia": {"PA", "NJ", "DE"},
+    "portland": {"OR", "WA"}, "kansas city": {"MO", "KS"}, "cincinnati": {"OH", "KY", "IN"},
+    "st. louis": {"MO", "IL"}, "boston": {"MA", "NH"}, "chicago": {"IL", "IN"}, "charlotte": {"NC", "SC"},
+}
+
+
 def is_local(job_location, user_city, user_state="", strict=False):
     """True when the job's location is in the user's city / metro area (or state for small towns)."""
     loc = (job_location or "").lower()
@@ -116,12 +125,18 @@ def is_local(job_location, user_city, user_state="", strict=False):
         return False
     metro = metro_for(city)
     names = METROS.get(metro, [city]) if metro else [city]
-    for n in names:
-        for m in re.finditer(r"\b" + re.escape(n) + r"\b", loc):
-            # "Albany, New York" names the state, not the city: skip a match that follows a comma.
-            if n in ("new york", "washington") and re.search(r",\s*$", loc[:m.start()]):
-                continue
-            return True
+    allowed = set(METRO_STATES.get(metro, set())) | ({user_state.upper()} if user_state else set())
+    for part in re.split(r"[;|/\n]|\s{2,}", job_location or ""):
+        low = part.lower()
+        named = _state_of(part) if allowed else set()
+        if named and not named & allowed:
+            continue
+        for n in names:
+            for m in re.finditer(r"\b" + re.escape(n) + r"\b", low):
+                # "Albany, New York" names the state, not the city: skip a match that follows a comma.
+                if n in ("new york", "washington") and re.search(r",\s*$", low[:m.start()]):
+                    continue
+                return True
     if not strict and not metro and user_state and user_state.upper() in _state_of(job_location or ""):
         return True
     return False
